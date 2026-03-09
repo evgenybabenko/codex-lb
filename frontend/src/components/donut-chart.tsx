@@ -42,9 +42,11 @@ function SafeLineTick({
 }) {
   if (riskLevel === "safe") return null;
 
-  // Recharts uses polarToCartesian: cos(-RADIAN * angle), sin(-RADIAN * angle)
-  // startAngle=90 (12 o'clock), endAngle=-270 (clockwise full circle)
-  const angleDeg = 90 - (safePercent / 100) * 360;
+  // The donut draws remaining slices first (clockwise from 12 o'clock),
+  // then consumed last. safePercent is the allowed *used* budget, so the
+  // boundary where remaining starts being insufficient is at (100 - safePercent).
+  const remainingBudget = 100 - safePercent;
+  const angleDeg = 90 - (remainingBudget / 100) * 360;
   const angleRad = -(angleDeg * Math.PI) / 180;
 
   const x1 = cx + innerRadius * Math.cos(angleRad);

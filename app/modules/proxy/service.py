@@ -829,7 +829,7 @@ class ProxyService:
                     if window_minutes_values or reset_at_values:
                         window_minutes = max(window_minutes_values) if window_minutes_values else 300
                         limit_window_seconds = int(window_minutes * 60)
-                        reset_at = int(max(reset_at_values)) if reset_at_values else 0
+                        reset_at = int(min(reset_at_values)) if reset_at_values else 0
                         reset_after_seconds = max(0, reset_at - now_epoch)
 
                         window_snapshot = RateLimitWindowSnapshotData(
@@ -850,7 +850,7 @@ class ProxyService:
                     if sec_window_values or sec_reset_values:
                         sec_window_minutes = max(sec_window_values) if sec_window_values else 300
                         sec_limit_window_seconds = int(sec_window_minutes * 60)
-                        sec_reset_at = int(max(sec_reset_values)) if sec_reset_values else 0
+                        sec_reset_at = int(min(sec_reset_values)) if sec_reset_values else 0
                         sec_reset_after_seconds = max(0, sec_reset_at - now_epoch)
                         secondary_window_snapshot = RateLimitWindowSnapshotData(
                             used_percent=int(max(0.0, min(100.0, sec_avg))),

@@ -400,7 +400,8 @@ def _aggregate_additional_window(
 ) -> AdditionalWindowSummary | None:
     """Aggregate per-account entries into a single window summary.
 
-    Averaging ``used_percent`` and taking the max of ``reset_at`` / ``window_minutes``.
+    Averaging ``used_percent``, using the earliest ``reset_at`` (min) and the
+    largest ``window_minutes`` (max) for consistent pool behavior.
     """
     if not entries:
         return None
@@ -420,7 +421,7 @@ def _aggregate_additional_window(
 
     return AdditionalWindowSummary(
         used_percent=total_percent / count,
-        reset_at=max(reset_candidates) if reset_candidates else None,
+        reset_at=min(reset_candidates) if reset_candidates else None,
         window_minutes=max(wm_candidates) if wm_candidates else None,
     )
 

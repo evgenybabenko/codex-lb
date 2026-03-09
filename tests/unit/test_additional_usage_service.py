@@ -75,7 +75,7 @@ def test_build_additional_usage_summary_aggregates_accounts():
     assert summary.primary_window is not None
     assert isinstance(summary.primary_window, AdditionalWindowSummary)
     assert summary.primary_window.used_percent == pytest.approx(50.0)
-    assert summary.primary_window.reset_at == 2000  # max
+    assert summary.primary_window.reset_at == 1000  # min (earliest reset for pool)
     assert summary.primary_window.window_minutes == 120  # max
 
     assert summary.secondary_window is None
@@ -254,12 +254,12 @@ def test_build_additional_usage_summary_max_reset_at_and_window_minutes():
     pw = result[0].primary_window
     assert pw is not None
     assert pw.used_percent == pytest.approx(20.0)  # (10+20+30)/3
-    assert pw.reset_at == 900  # max
+    assert pw.reset_at == 100  # min (earliest reset for pool)
     assert pw.window_minutes == 120  # max
 
 
 def test_build_additional_usage_summary_none_reset_at():
-    """None reset_at values are ignored in max computation."""
+    """None reset_at values are ignored in min computation."""
     data: dict[str, dict[str, dict[str, AdditionalUsageHistory]]] = {
         "codex_other": {
             "primary": {
