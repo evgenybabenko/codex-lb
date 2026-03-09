@@ -53,6 +53,13 @@ class AdditionalUsageRepositoryPort(Protocol):
 
     async def delete_for_account_and_limit(self, account_id: str, limit_name: str) -> None: ...
 
+    async def delete_for_account_limit_window(
+        self,
+        account_id: str,
+        limit_name: str,
+        window: str,
+    ) -> None: ...
+
     async def list_limit_names(self, *, account_ids: list[str] | None = None) -> list[str]: ...
 
 
@@ -152,6 +159,53 @@ class UsageUpdater:
 
         await self._sync_plan_type(account, payload)
 
+        now_epoch = _now_epoch()
+        if self._additional_usage_repo is not None:
+            if payload.additional_rate_limits:
+                current_entries: set[tuple[str, str]] = set()
+                for additional in payload.additional_rate_limits:
+                    if additional.rate_limit is None:
+                        continue
+                    add_primary = additional.rate_limit.primary_window
+                    add_secondary = additional.rate_limit.secondary_window
+                    if add_primary and add_primary.used_percent is not None:
+                        current_entries.add((additional.limit_name, "primary"))
+                        await self._additional_usage_repo.add_entry(
+                            account_id=account.id,
+                            limit_name=additional.limit_name,
+                            metered_feature=additional.metered_feature,
+                            window="primary",
+                            used_percent=float(add_primary.used_percent),
+                            reset_at=_reset_at(add_primary.reset_at, add_primary.reset_after_seconds, now_epoch),
+                            window_minutes=_window_minutes(add_primary.limit_window_seconds),
+                        )
+                    if add_secondary and add_secondary.used_percent is not None:
+                        current_entries.add((additional.limit_name, "secondary"))
+                        await self._additional_usage_repo.add_entry(
+                            account_id=account.id,
+                            limit_name=additional.limit_name,
+                            metered_feature=additional.metered_feature,
+                            window="secondary",
+                            used_percent=float(add_secondary.used_percent),
+                            reset_at=_reset_at(add_secondary.reset_at, add_secondary.reset_after_seconds, now_epoch),
+                            window_minutes=_window_minutes(add_secondary.limit_window_seconds),
+                        )
+                current_limit_names = {name for name, _ in current_entries}
+                existing_names = await self._additional_usage_repo.list_limit_names(account_ids=[account.id])
+                for stale_name in existing_names:
+                    if stale_name not in current_limit_names:
+                        await self._additional_usage_repo.delete_for_account_and_limit(account.id, stale_name)
+                        continue
+                    for window in ("primary", "secondary"):
+                        if (stale_name, window) not in current_entries:
+                            await self._additional_usage_repo.delete_for_account_limit_window(
+                                account.id,
+                                stale_name,
+                                window,
+                            )
+            elif payload.additional_rate_limits is not None:
+                await self._additional_usage_repo.delete_for_account(account.id)
+
         rate_limit = payload.rate_limit
         if rate_limit is None:
             return AccountRefreshResult(usage_written=False)
@@ -159,7 +213,6 @@ class UsageUpdater:
         primary = rate_limit.primary_window
         secondary = rate_limit.secondary_window
         credits_has, credits_unlimited, credits_balance = _credits_snapshot(payload)
-        now_epoch = _now_epoch()
         usage_written = False
 
         if primary and primary.used_percent is not None:
@@ -188,43 +241,6 @@ class UsageUpdater:
                 window_minutes=_window_minutes(secondary.limit_window_seconds),
             )
             usage_written = usage_written or _usage_entry_written(entry)
-
-        if self._additional_usage_repo is not None:
-            if payload.additional_rate_limits:
-                current_limit_names: set[str] = set()
-                for additional in payload.additional_rate_limits:
-                    if additional.rate_limit is None:
-                        continue
-                    current_limit_names.add(additional.limit_name)
-                    add_primary = additional.rate_limit.primary_window
-                    add_secondary = additional.rate_limit.secondary_window
-                    if add_primary and add_primary.used_percent is not None:
-                        await self._additional_usage_repo.add_entry(
-                            account_id=account.id,
-                            limit_name=additional.limit_name,
-                            metered_feature=additional.metered_feature,
-                            window="primary",
-                            used_percent=float(add_primary.used_percent),
-                            reset_at=_reset_at(add_primary.reset_at, add_primary.reset_after_seconds, now_epoch),
-                            window_minutes=_window_minutes(add_primary.limit_window_seconds),
-                        )
-                    if add_secondary and add_secondary.used_percent is not None:
-                        await self._additional_usage_repo.add_entry(
-                            account_id=account.id,
-                            limit_name=additional.limit_name,
-                            metered_feature=additional.metered_feature,
-                            window="secondary",
-                            used_percent=float(add_secondary.used_percent),
-                            reset_at=_reset_at(add_secondary.reset_at, add_secondary.reset_after_seconds, now_epoch),
-                            window_minutes=_window_minutes(add_secondary.limit_window_seconds),
-                        )
-                existing_names = await self._additional_usage_repo.list_limit_names(account_ids=[account.id])
-                for stale_name in existing_names:
-                    if stale_name not in current_limit_names:
-                        await self._additional_usage_repo.delete_for_account_and_limit(account.id, stale_name)
-            elif payload.additional_rate_limits is not None:
-                await self._additional_usage_repo.delete_for_account(account.id)
-
         return AccountRefreshResult(usage_written=usage_written)
 
     async def _deactivate_for_client_error(self, account: Account, exc: UsageFetchError) -> None:

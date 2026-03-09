@@ -135,3 +135,38 @@ async def test_dashboard_overview_maps_weekly_only_primary_to_secondary(async_cl
     assert accounts["acc_free"]["windowMinutesPrimary"] is None
     assert accounts["acc_free"]["windowMinutesSecondary"] == 10080
     assert accounts["acc_free"]["usage"]["secondaryRemainingPercent"] == pytest.approx(80.0)
+
+
+@pytest.mark.asyncio
+async def test_dashboard_overview_computes_depletion_from_recent_db_history(async_client, db_setup):
+    now = utcnow().replace(microsecond=0)
+
+    async with SessionLocal() as session:
+        accounts_repo = AccountsRepository(session)
+        usage_repo = UsageRepository(session)
+
+        await accounts_repo.upsert(_make_account("acc_depletion", "depletion@example.com"))
+        await usage_repo.add_entry(
+            "acc_depletion",
+            10.0,
+            window="primary",
+            window_minutes=60,
+            reset_at=int((now + timedelta(minutes=45)).timestamp()),
+            recorded_at=now - timedelta(minutes=20),
+        )
+        await usage_repo.add_entry(
+            "acc_depletion",
+            35.0,
+            window="primary",
+            window_minutes=60,
+            reset_at=int((now + timedelta(minutes=45)).timestamp()),
+            recorded_at=now - timedelta(minutes=5),
+        )
+
+    response = await async_client.get("/api/dashboard/overview")
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["depletion"] is not None
+    assert 0.0 <= payload["depletion"]["risk"] <= 1.0
+    assert payload["depletion"]["riskLevel"] in {"safe", "warning", "danger", "critical"}

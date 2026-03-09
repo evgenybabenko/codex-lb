@@ -92,7 +92,14 @@ class DashboardService:
         additional_quotas = await self._build_additional_quotas()
 
         # Compute depletion from primary usage history
-        depletion_response = _build_depletion(primary_usage, now)
+        history_since = now - timedelta(hours=1)
+        primary_history: dict[str, list[UsageHistory]] = {}
+        for account_id in primary_usage:
+            rows = await self._repo.usage_history_since(account_id, "primary", history_since)
+            if rows:
+                primary_history[account_id] = rows
+
+        depletion_response = _build_depletion(primary_history, now)
 
         return DashboardOverviewResponse(
             last_sync_at=_latest_recorded_at(primary_usage, secondary_usage),
@@ -142,23 +149,16 @@ class DashboardService:
 
 
 def _build_depletion(
-    primary_usage: dict[str, UsageHistory],
+    primary_history: dict[str, list[UsageHistory]],
     now,
 ) -> DepletionResponse | None:
-    """Compute aggregate depletion from primary usage history.
-
-    Each account's latest entry is passed to ``compute_depletion_for_account``.
-    The function requires >=2 data points to compute a rate; with only
-    ``latest_by_account`` data the result will typically be ``None`` until the
-    EWMA state has accumulated across multiple dashboard refreshes.
-    """
     per_account_metrics = []
-    for account_id, entry in primary_usage.items():
+    for account_id, history in primary_history.items():
         metrics = compute_depletion_for_account(
             account_id=account_id,
             limit_name="standard",
             window="primary",
-            history=[entry],
+            history=history,
             now=now,
         )
         per_account_metrics.append(metrics)

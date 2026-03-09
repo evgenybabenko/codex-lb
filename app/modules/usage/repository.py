@@ -116,6 +116,24 @@ class UsageRepository:
         result = await self._session.execute(stmt)
         return {entry.account_id: entry for entry in result.scalars().all()}
 
+    async def history_since(
+        self,
+        account_id: str,
+        window: str,
+        since: datetime,
+    ) -> list[UsageHistory]:
+        stmt = (
+            select(UsageHistory)
+            .where(
+                UsageHistory.account_id == account_id,
+                _window_clause(window),
+                UsageHistory.recorded_at >= since,
+            )
+            .order_by(UsageHistory.recorded_at.asc())
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
     async def trends_by_bucket(
         self,
         since: datetime,
@@ -211,6 +229,20 @@ class AdditionalUsageRepository:
         stmt = delete(AdditionalUsageHistory).where(
             AdditionalUsageHistory.account_id == account_id,
             AdditionalUsageHistory.limit_name == limit_name,
+        )
+        await self._session.execute(stmt)
+        await self._session.commit()
+
+    async def delete_for_account_limit_window(
+        self,
+        account_id: str,
+        limit_name: str,
+        window: str,
+    ) -> None:
+        stmt = delete(AdditionalUsageHistory).where(
+            AdditionalUsageHistory.account_id == account_id,
+            AdditionalUsageHistory.limit_name == limit_name,
+            AdditionalUsageHistory.window == window,
         )
         await self._session.execute(stmt)
         await self._session.commit()
