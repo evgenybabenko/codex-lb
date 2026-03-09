@@ -175,8 +175,10 @@ class UsageUpdater:
                 for additional in payload.additional_rate_limits:
                     if additional.rate_limit is None:
                         # Limit exists but has no window data right now; still mark
-                        # it as current so the prune pass doesn't delete stored rows.
+                        # both windows as current so the prune pass doesn't delete
+                        # previously stored rows for either window.
                         current_entries.add((additional.limit_name, "primary"))
+                        current_entries.add((additional.limit_name, "secondary"))
                         continue
                     add_primary = additional.rate_limit.primary_window
                     add_secondary = additional.rate_limit.secondary_window

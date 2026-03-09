@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from app.core import usage as usage_core
@@ -89,7 +89,7 @@ class DashboardService:
         )
 
         # Fetch additional usage data
-        additional_quotas = await self._build_additional_quotas()
+        additional_quotas, additional_sync_ts = await self._build_additional_quotas()
 
         # Compute depletion from primary usage history.
         # Only include accounts that survived normalization (weekly-only accounts
@@ -108,7 +108,7 @@ class DashboardService:
         depletion_response = _build_depletion(primary_history, now)
 
         return DashboardOverviewResponse(
-            last_sync_at=_latest_recorded_at(primary_usage, secondary_usage),
+            last_sync_at=_latest_recorded_at(primary_usage, secondary_usage, additional_sync_ts),
             accounts=account_summaries,
             summary=summary,
             windows=windows,
@@ -117,21 +117,30 @@ class DashboardService:
             depletion=depletion_response,
         )
 
-    async def _build_additional_quotas(self) -> list[AdditionalQuotaResponse]:
-        """Fetch additional usage data and build quota responses."""
+    async def _build_additional_quotas(self) -> tuple[list[AdditionalQuotaResponse], list[datetime]]:
+        """Fetch additional usage data and build quota responses.
+
+        Returns the quota list and a list of recorded_at timestamps for sync tracking.
+        """
         repo = self._repo
         limit_names = await repo.list_additional_limit_names()
 
         additional_usage_data: dict[str, dict[str, dict[str, Any]]] = {}
+        sync_timestamps: list[datetime] = []
         for limit_name in limit_names:
+            primary_entries = await repo.latest_additional_usage_by_account(limit_name, "primary")
+            secondary_entries = await repo.latest_additional_usage_by_account(limit_name, "secondary")
             additional_usage_data[limit_name] = {
-                "primary": await repo.latest_additional_usage_by_account(limit_name, "primary"),
-                "secondary": await repo.latest_additional_usage_by_account(limit_name, "secondary"),
+                "primary": primary_entries,
+                "secondary": secondary_entries,
             }
+            for entry in list(primary_entries.values()) + list(secondary_entries.values()):
+                if hasattr(entry, "recorded_at") and entry.recorded_at is not None:
+                    sync_timestamps.append(entry.recorded_at)
 
         additional_summaries = build_additional_usage_summary(additional_usage_data)
 
-        return [
+        quotas = [
             AdditionalQuotaResponse(
                 limit_name=s.limit_name,
                 metered_feature=s.metered_feature,
@@ -152,6 +161,7 @@ class DashboardService:
             )
             for s in additional_summaries
         ]
+        return quotas, sync_timestamps
 
 
 def _build_depletion(
@@ -199,10 +209,13 @@ def _rows_from_latest(latest: dict[str, UsageHistory]) -> list[UsageWindowRow]:
 def _latest_recorded_at(
     primary_usage: dict[str, UsageHistory],
     secondary_usage: dict[str, UsageHistory],
+    extra_timestamps: list[datetime] | None = None,
 ):
     timestamps = [
         entry.recorded_at
         for entry in list(primary_usage.values()) + list(secondary_usage.values())
         if entry.recorded_at is not None
     ]
+    if extra_timestamps:
+        timestamps.extend(extra_timestamps)
     return max(timestamps) if timestamps else None
