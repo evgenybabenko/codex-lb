@@ -99,7 +99,7 @@ class DashboardService:
         for account_id, usage_entry in primary_usage.items():
             if account_id not in normalized_primary_ids:
                 continue
-            acct_window = usage_entry.window_minutes if usage_entry.window_minutes else 60
+            acct_window = usage_entry.window_minutes if usage_entry.window_minutes else 300
             acct_since = now - timedelta(minutes=acct_window)
             rows = await self._repo.usage_history_since(account_id, "primary", acct_since)
             if rows:

@@ -12,7 +12,7 @@ from app.core.usage.depletion import (
     compute_safe_usage_percent,
     ewma_update,
 )
-from app.core.utils.time import utcnow
+from app.core.utils.time import naive_utc_to_epoch, utcnow
 
 # In-memory EWMA state: keyed by (account_id, limit_name, window)
 # Persists across requests; resets on process restart.
@@ -90,7 +90,7 @@ def compute_depletion_for_account(
     # Compute seconds until reset
     seconds_until_reset = 0.0
     if latest.reset_at is not None:
-        seconds_until_reset = max(0.0, latest.reset_at - now.timestamp())
+        seconds_until_reset = max(0.0, latest.reset_at - naive_utc_to_epoch(now))
     elif latest.window_minutes is not None:
         window_seconds = latest.window_minutes * 60
         first = history[0]

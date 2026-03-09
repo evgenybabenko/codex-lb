@@ -848,7 +848,7 @@ class ProxyService:
                     sec_reset_values = [e.reset_at for e in filtered_secondary.values() if e.reset_at]
 
                     if sec_window_values or sec_reset_values:
-                        sec_window_minutes = max(sec_window_values) if sec_window_values else 300
+                        sec_window_minutes = max(sec_window_values) if sec_window_values else 10080
                         sec_limit_window_seconds = int(sec_window_minutes * 60)
                         sec_reset_at = int(min(sec_reset_values)) if sec_reset_values else 0
                         sec_reset_after_seconds = max(0, sec_reset_at - now_epoch)
