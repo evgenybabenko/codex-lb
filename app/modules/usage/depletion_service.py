@@ -61,7 +61,10 @@ def compute_depletion_for_account(
     key = (account_id, limit_name, window)
     state = _ewma_states.get(key)
 
-    if len(history) < 2 and state is None:
+    if len(history) < 2:
+        # Only one in-window sample — seed the EWMA but don't compute
+        # depletion.  Reset any cached state so we never derive a rate
+        # from an out-of-window sample plus this one.
         entry = history[0]
         _ewma_states[key] = ewma_update(
             None, entry.used_percent, naive_utc_to_epoch(entry.recorded_at), reset_at=entry.reset_at

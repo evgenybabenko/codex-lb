@@ -122,7 +122,8 @@ class UsageUpdater:
                     usage_account_id=account.chatgpt_account_id,
                 )
                 refreshed = refreshed or result.usage_written
-                _last_successful_refresh[account.id] = now
+                if result.usage_written:
+                    _last_successful_refresh[account.id] = now
             except Exception as exc:
                 logger.warning(
                     "Usage refresh failed account_id=%s request_id=%s error=%s",
