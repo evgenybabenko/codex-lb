@@ -114,9 +114,13 @@ def test_has_native_codex_transport_headers_requires_allowlisted_originator():
     assert proxy_module._has_native_codex_transport_headers({"originator": "other-client"}) is False
 
 
-def test_has_native_codex_transport_headers_still_accepts_native_stream_headers_without_originator():
-    assert proxy_module._has_native_codex_transport_headers({"session_id": "sid_123"}) is True
+def test_has_native_codex_transport_headers_does_not_treat_session_id_as_websocket_signal():
+    assert proxy_module._has_native_codex_transport_headers({"session_id": "sid_123"}) is False
+
+
+def test_has_native_codex_transport_headers_still_accepts_explicit_native_stream_headers_without_originator():
     assert proxy_module._has_native_codex_transport_headers({"x-codex-turn-metadata": "1"}) is True
+    assert proxy_module._has_native_codex_transport_headers({"x-codex-beta-features": "repl"}) is True
 
 
 def test_parse_sse_event_reads_json_payload():
@@ -1375,6 +1379,46 @@ async def test_stream_responses_auto_transport_uses_model_preference(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_stream_responses_auto_transport_keeps_http_for_bare_session_affinity(monkeypatch):
+    class Settings:
+        upstream_base_url = "https://chatgpt.com/backend-api"
+        upstream_stream_transport = "auto"
+        upstream_connect_timeout_seconds = 8.0
+        stream_idle_timeout_seconds = 45.0
+        max_sse_event_bytes = 1024
+        image_inline_fetch_enabled = False
+        log_upstream_request_payload = False
+        proxy_request_budget_seconds = 75.0
+        log_upstream_request_summary = False
+
+    registry = SimpleNamespace(get_snapshot=lambda: SimpleNamespace(models={}))
+
+    monkeypatch.setattr(proxy_module, "get_settings", lambda: Settings())
+    monkeypatch.setattr(proxy_module, "get_model_registry", lambda: registry)
+    monkeypatch.setattr(proxy_module, "_maybe_log_upstream_request_start", lambda **kwargs: None)
+    monkeypatch.setattr(proxy_module, "_maybe_log_upstream_request_complete", lambda **kwargs: None)
+
+    session = _SseSession(_SsePostResponse([b'data: {"type":"response.completed","response":{"id":"resp_http"}}\n\n']))
+    payload = ResponsesRequest.model_validate(
+        {"model": "gpt-5.4", "instructions": "hi", "input": [{"role": "user", "content": "hi"}]}
+    )
+
+    events = [
+        event
+        async for event in proxy_module.stream_responses(
+            payload,
+            headers={"session_id": "sid-affinity-only"},
+            access_token="token",
+            account_id="acc_1",
+            session=cast(proxy_module.aiohttp.ClientSession, session),
+        )
+    ]
+
+    assert session.calls
+    assert events == ['data: {"type":"response.completed","response":{"id":"resp_http"}}\n\n']
+
+
+@pytest.mark.asyncio
 async def test_stream_responses_auto_transport_falls_back_to_http_when_websocket_handshake_rejected(monkeypatch):
     class Settings:
         upstream_base_url = "https://chatgpt.com/backend-api"
@@ -1908,7 +1952,7 @@ def test_logged_error_json_response_emits_proxy_error_log(caplog):
 
 
 @pytest.mark.asyncio
-async def test_stream_responses_logs_requested_service_tier_trace(monkeypatch, caplog):
+async def test_stream_responses_logs_actual_service_tier_and_requested_tier_trace(monkeypatch, caplog):
     settings = _make_proxy_settings(log_proxy_service_tier_trace=True)
     request_logs = _RequestLogsRecorder()
     service = proxy_service.ProxyService(_repo_factory(request_logs))
@@ -1949,7 +1993,7 @@ async def test_stream_responses_logs_requested_service_tier_trace(monkeypatch, c
 
     assert chunks
     assert request_id
-    assert request_logs.calls[0]["service_tier"] == "priority"
+    assert request_logs.calls[0]["service_tier"] == "default"
     assert f"request_id={request_id}" in caplog.text
     assert "kind=stream" in caplog.text
     assert "requested_service_tier=priority" in caplog.text

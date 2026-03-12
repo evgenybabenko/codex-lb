@@ -17,6 +17,11 @@ For streaming Codex/Responses proxy requests, the system MUST let operators choo
 - **AND** the upstream rejects the websocket upgrade with HTTP `403`, `404`, or `426`
 - **THEN** the proxy MUST retry the same streaming request over the existing HTTP Responses transport before failing the client stream
 
+#### Scenario: Session affinity alone does not trigger websocket upstream transport
+- **WHEN** a backend Codex Responses request includes `session_id` only for routing affinity
+- **AND** it does not include an allowlisted native Codex `originator` or explicit Codex websocket feature headers
+- **THEN** the `"auto"` transport strategy MUST keep using the existing HTTP Responses transport unless model preference selects websocket
+
 ### Requirement: Fast service tier aliases priority upstream
 When a Responses request includes `service_tier: "fast"`, the service MUST preserve the requested tier for local observability while normalizing the outbound upstream payload to `service_tier: "priority"`.
 
@@ -24,12 +29,12 @@ When a Responses request includes `service_tier: "fast"`, the service MUST prese
 - **WHEN** a client sends a valid Responses request with `service_tier: "fast"`
 - **THEN** the proxy accepts the request
 - **AND** the outbound upstream request uses `service_tier: "priority"`
-- **AND** the persisted request log keeps the client-requested tier visible as `"fast"`
+- **AND** operators can still observe the requested tier separately from the persisted billable request-log tier
 
-### Requirement: Streaming request logs preserve requested service tier
-When a streaming Responses request completes, the persisted request log MUST prefer the client-requested `service_tier` over any upstream-reported effective tier for the request-log `service_tier` field.
+### Requirement: Streaming request logs preserve the billable service tier
+When a streaming Responses request completes, the persisted request log MUST keep the effective service tier used for pricing and summaries, while requested-versus-actual tier comparison remains an observability concern outside the billable `service_tier` field.
 
 #### Scenario: Upstream downgrades the reported tier
 - **WHEN** a client sends `service_tier: "priority"` for a streaming Responses request
 - **AND** the upstream response later reports `service_tier: "auto"` or `"default"`
-- **THEN** the persisted request log entry records `service_tier: "priority"`
+- **THEN** the persisted request log entry records the upstream-reported effective `service_tier`

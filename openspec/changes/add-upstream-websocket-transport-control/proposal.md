@@ -3,13 +3,13 @@
 Native Codex clients can stream upstream over the Responses WebSocket transport, but `codex-lb` only exposed coarse environment-based control for that path and did not let operators switch the transport from the dashboard. At the same time, two interoperability gaps remained visible during native Codex testing:
 
 - upstream rejects `service_tier: "fast"` even though Codex fast mode expects priority-tier handling
-- streaming request logs could show the upstream-reported tier instead of the client-requested tier, which made native Codex traffic look slower or misconfigured
+- operators needed a safe way to compare requested versus upstream-effective service tiers during native Codex testing without changing billable request-log semantics
 
 ## What Changes
 
 - Add a dashboard routing setting that lets operators choose the upstream streaming transport: `default`, `auto`, `http`, or `websocket`.
 - Support native upstream Responses WebSockets while keeping local client compatibility, account pooling, sticky routing, and retries intact.
-- Normalize `service_tier: "fast"` to `"priority"` for upstream compatibility while preserving the requested tier in request logs.
+- Normalize `service_tier: "fast"` to `"priority"` for upstream compatibility while preserving requested-versus-actual tier observability separately from billable request logs.
 - Document the operator-facing dashboard control and the experimental Codex-side feature flags separately from `wire_api = "responses"`.
 
 ## Impact

@@ -6,7 +6,7 @@
 ## 2. Codex interoperability
 
 - [x] 2.1 Normalize `service_tier: "fast"` to upstream-compatible `"priority"`
-- [x] 2.2 Preserve the client-requested service tier in streaming request logs even when upstream reports a different effective tier
+- [x] 2.2 Preserve requested-versus-actual service-tier observability without changing billable streaming request-log tiers
 
 ## 3. UI and documentation
 

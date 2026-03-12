@@ -1265,7 +1265,6 @@ class ProxyService:
             reasoning_tokens = (
                 usage.output_tokens_details.reasoning_tokens if usage and usage.output_tokens_details else None
             )
-            log_service_tier = requested_service_tier if isinstance(requested_service_tier, str) else service_tier
             settlement.status = status
             settlement.model = model
             settlement.service_tier = service_tier
@@ -1288,7 +1287,7 @@ class ProxyService:
                 cached_input_tokens=cached_input_tokens,
                 reasoning_tokens=reasoning_tokens,
                 reasoning_effort=reasoning_effort,
-                service_tier=log_service_tier,
+                service_tier=service_tier,
             )
             _maybe_log_proxy_service_tier_trace(
                 "stream",
