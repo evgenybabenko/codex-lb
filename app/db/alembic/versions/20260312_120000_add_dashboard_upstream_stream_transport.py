@@ -13,7 +13,7 @@ from sqlalchemy.engine import Connection
 
 # revision identifiers, used by Alembic.
 revision = "20260312_120000_add_dashboard_upstream_stream_transport"
-down_revision = "20260312_020000_merge_request_logs_transport_and_sticky_heads"
+down_revision = "20260313_024500_merge_request_log_transport_heads"
 branch_labels = None
 depends_on = None
 
