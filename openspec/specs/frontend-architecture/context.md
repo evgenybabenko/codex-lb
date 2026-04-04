@@ -33,8 +33,8 @@ does not.
 - Keep Codex App pointed at the stable stack on `http://127.0.0.1:2455`.
 - Keep UI iteration and risky restarts isolated to the sandbox on
   `2456/5174`.
-- Use separate Docker named volumes so the main and sandbox stacks do not share
-  SQLite files or encryption keys.
+- Use separate host data directories from `.env.local` so the main and sandbox
+  stacks do not share SQLite files or encryption keys.
 - Prefer switching between worktrees by opening the corresponding directory,
   not by repeatedly changing branches inside one checkout.
 
@@ -51,14 +51,14 @@ base_url = "http://127.0.0.1:2455/backend-api/codex"
 That means active Codex App chats depend on the `main` stack on port `2455`,
 not the sandbox on `2456`.
 
-The compose files are expected to use these Docker volumes:
+The compose files are expected to read these `.env.local` variables:
 
-- main/runtime: `codex-lb-data`
-- sandbox: `codex-lb-sandbox-data`
+- `CODEX_LB_HOST_DATA_DIR` for the main/runtime stack
+- `CODEX_LB_SANDBOX_HOST_DATA_DIR` for the sandbox stack
 
-Per-developer path overrides or other machine-specific Docker changes belong in
-an untracked `docker-compose.override.yml`, not in the shared base compose
-files.
+Each variable should point at a developer-local directory. The path values are
+machine-specific, but the Compose files stay shared and portable because the
+actual paths live only in untracked environment config.
 
 When the topology is healthy:
 

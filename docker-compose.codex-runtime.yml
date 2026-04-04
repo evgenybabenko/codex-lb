@@ -9,7 +9,7 @@ services:
       - "2455:2455"
       - "1455:1455"
     volumes:
-      - codex-lb-data:/var/lib/codex-lb
+      - ${CODEX_LB_HOST_DATA_DIR:?Set CODEX_LB_HOST_DATA_DIR in .env.local}:/var/lib/codex-lb
     healthcheck:
       test:
         - CMD
@@ -21,7 +21,3 @@ services:
       retries: 3
       start_period: 30s
     restart: unless-stopped
-
-volumes:
-  codex-lb-data:
-    name: codex-lb-data

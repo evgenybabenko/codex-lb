@@ -19,7 +19,7 @@ services:
       - "2455"
       - --reload
     volumes:
-      - codex-lb-sandbox-data:/var/lib/codex-lb
+      - ${CODEX_LB_SANDBOX_HOST_DATA_DIR:?Set CODEX_LB_SANDBOX_HOST_DATA_DIR in .env.local}:/var/lib/codex-lb
     develop:
       watch:
         - action: sync
@@ -58,7 +58,3 @@ services:
           path: ./frontend/package.json
         - action: rebuild
           path: ./frontend/bun.lock
-
-volumes:
-  codex-lb-sandbox-data:
-    name: codex-lb-sandbox-data

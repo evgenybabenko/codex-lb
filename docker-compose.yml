@@ -18,7 +18,7 @@ services:
       - "2455"
       - --reload
     volumes:
-      - codex-lb-data:/var/lib/codex-lb
+      - ${CODEX_LB_HOST_DATA_DIR:?Set CODEX_LB_HOST_DATA_DIR in .env.local}:/var/lib/codex-lb
     develop:
       watch:
         - action: sync
@@ -77,7 +77,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  codex-lb-data:
-    name: codex-lb-data
   codex-lb-postgres-data:
     name: codex-lb-postgres-data
