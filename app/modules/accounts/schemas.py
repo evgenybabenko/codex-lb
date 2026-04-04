@@ -39,6 +39,9 @@ class AccountAuthStatus(DashboardModel):
     access: AccountTokenStatus | None = None
     refresh: AccountTokenStatus | None = None
     id_token: AccountTokenStatus | None = None
+    subscription_active_start: datetime | None = None
+    subscription_active_until: datetime | None = None
+    subscription_last_checked: datetime | None = None
 
 
 class AccountAdditionalWindow(DashboardModel):
@@ -60,6 +63,8 @@ class AccountSummary(DashboardModel):
     account_id: str
     email: str
     display_name: str
+    workspace_id: str | None = None
+    workspace_name: str | None = None
     plan_type: str
     status: str
     usage: AccountUsage | None = None
@@ -87,6 +92,8 @@ class AccountImportResponse(DashboardModel):
     email: str
     plan_type: str
     status: str
+    workspace_id: str | None = None
+    workspace_name: str | None = None
 
 
 class AccountPauseResponse(DashboardModel):

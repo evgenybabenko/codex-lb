@@ -2,10 +2,18 @@ export type AccountIdentityLike = {
   accountId: string;
   email: string;
   displayName: string;
+  workspaceId?: string | null;
+  workspaceName?: string | null;
 };
 
 function identityKey(account: AccountIdentityLike): string {
   const email = account.email.trim().toLowerCase();
+  const workspaceId = account.workspaceId?.trim().toLowerCase() ?? "";
+  const workspaceName = account.workspaceName?.trim().toLowerCase() ?? "";
+  const workspaceKey = workspaceId || workspaceName;
+  if (email && workspaceKey) {
+    return `email:${email}|workspace:${workspaceKey}`;
+  }
   if (email) {
     return `email:${email}`;
   }
@@ -39,4 +47,26 @@ export function formatCompactAccountId(accountId: string, headChars = 8, tailCha
     return accountId;
   }
   return `${accountId.slice(0, head)}...${accountId.slice(-tail)}`;
+}
+
+export function formatWorkspaceLabel(account: Pick<AccountIdentityLike, "workspaceId" | "workspaceName">): string | null {
+  const workspaceName = account.workspaceName?.trim();
+  if (workspaceName) {
+    return workspaceName;
+  }
+  if (account.workspaceId?.trim()) {
+    return "Workspace";
+  }
+  return null;
+}
+
+export function formatWorkspaceTitle(account: Pick<AccountIdentityLike, "workspaceId" | "workspaceName">): string | null {
+  const workspaceName = account.workspaceName?.trim();
+  if (workspaceName) {
+    return `Workspace ${workspaceName}`;
+  }
+  if (account.workspaceId?.trim()) {
+    return "Workspace";
+  }
+  return null;
 }

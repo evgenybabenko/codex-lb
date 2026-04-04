@@ -8,6 +8,8 @@ import {
 } from "@/features/accounts/api";
 import { OAuthStateSchema, type OAuthState } from "@/features/accounts/schemas";
 
+const BROWSER_STATUS_POLL_INTERVAL_MS = 1000;
+
 const INITIAL_OAUTH_STATE: OAuthState = OAuthStateSchema.parse({
   status: "idle",
   method: null,
@@ -166,16 +168,29 @@ export function useOauth() {
   }, []);
 
   useEffect(() => {
-    if (state.status !== "pending" || !state.intervalSeconds || state.intervalSeconds <= 0) {
+    if (state.status !== "pending") {
       clearPollTimer();
       return;
     }
+
+    const pollIntervalMs =
+      state.method === "browser"
+        ? BROWSER_STATUS_POLL_INTERVAL_MS
+        : state.intervalSeconds && state.intervalSeconds > 0
+          ? state.intervalSeconds * 1000
+          : null;
+
+    if (!pollIntervalMs) {
+      clearPollTimer();
+      return;
+    }
+
     clearPollTimer();
     pollTimerRef.current = window.setInterval(() => {
       void poll();
-    }, state.intervalSeconds * 1000);
+    }, pollIntervalMs);
     return clearPollTimer;
-  }, [clearPollTimer, poll, state.intervalSeconds, state.status]);
+  }, [clearPollTimer, poll, state.intervalSeconds, state.method, state.status]);
 
   useEffect(() => {
     if (state.status !== "pending" || !state.expiresInSeconds || state.expiresInSeconds <= 0) {

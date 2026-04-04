@@ -22,6 +22,19 @@ class DashboardRepository:
     async def list_accounts(self) -> list[Account]:
         return await self._accounts_repo.list_accounts()
 
+    async def update_account_workspace_name(
+        self,
+        account_id: str,
+        *,
+        workspace_id: str | None,
+        workspace_name: str,
+    ) -> bool:
+        return await self._accounts_repo.update_identity_metadata(
+            account_id,
+            workspace_id=workspace_id,
+            workspace_name=workspace_name,
+        )
+
     async def latest_usage_by_account(self, window: str) -> dict[str, UsageHistory]:
         return await self._usage_repo.latest_by_account(window=window)
 

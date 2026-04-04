@@ -39,6 +39,9 @@ export type AccountAuthStatus = {
   access?: AccessTokenState | null;
   refresh?: TokenState | null;
   idToken?: TokenState | null;
+  subscriptionActiveStart?: string | null;
+  subscriptionActiveUntil?: string | null;
+  subscriptionLastChecked?: string | null;
 };
 
 export function formatSlug(value: string): string {
@@ -300,6 +303,14 @@ export function formatIdTokenLabel(auth: AccountAuthStatus | null | undefined): 
     unknown: "Unknown",
   };
   return state && labelMap[state] ? labelMap[state] : "Unknown";
+}
+
+export function formatDateTimeLabel(value: string | null | undefined): string {
+  const { date, time } = formatTimeLong(value);
+  if (date === "--" || time === "--") {
+    return "--";
+  }
+  return `${date} ${time}`;
 }
 
 export function toModels(value: string): string[] | undefined {

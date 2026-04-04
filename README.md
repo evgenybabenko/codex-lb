@@ -59,6 +59,25 @@ uvx codex-lb
 
 Open [localhost:2455](http://localhost:2455) → Add account → Done.
 
+Choose one runtime:
+
+- Docker if you want the fastest setup with persistent named volumes and no local Python or Node toolchain.
+- `uvx codex-lb` if you want a lightweight local single-binary style run.
+- Full local development mode if you plan to modify backend or frontend code.
+
+## Usage Flow
+
+Typical end-user flow:
+
+1. Start `codex-lb` with Docker or `uvx`.
+2. Open [localhost:2455](http://localhost:2455) and sign in to the dashboard.
+3. Add one or more ChatGPT accounts.
+   You can authenticate with the browser login flow or import an `auth.json` file if you already have one.
+4. Confirm that the account appears in the Accounts or Dashboard view and that models have synced.
+5. If you want client authentication, create an API key in the dashboard.
+6. Point Codex CLI, OpenCode, OpenClaw, or any OpenAI-compatible SDK at `codex-lb`.
+7. Use the client normally while `codex-lb` handles account pooling, routing, and usage tracking.
+
 ## Client Setup
 
 Point any OpenAI-compatible client at codex-lb. If [API key auth](#api-key-authentication) is enabled, pass a key from the dashboard as a Bearer token.
@@ -318,6 +337,20 @@ For external database, production config, ingress, observability, and more see t
 
 ## Development
 
+### Developer Flow
+
+Typical development flow:
+
+1. Read the relevant requirement in `openspec/specs/**`.
+2. If behavior or contracts change, create or update an OpenSpec change in `openspec/changes/**` before editing code.
+3. Start the app in Docker or local dev mode.
+4. Make the code change.
+5. Run the smallest relevant tests first, then run broader validation before committing.
+6. Validate OpenSpec artifacts with `npx -y @fission-ai/openspec validate --specs`.
+7. Commit code and spec updates together so behavior and documentation stay in sync.
+
+### Local Setup
+
 ```bash
 # Docker
 docker compose watch
@@ -327,6 +360,61 @@ uv sync && cd frontend && bun install && cd ..
 uv run fastapi run app/main.py --reload        # backend :2455
 cd frontend && bun run dev                     # frontend :5173
 ```
+
+Local toolchain expectations:
+
+- Python via `uv` and the repo-managed `.venv`
+- Node.js plus `bun` for the frontend workspace
+- Docker Desktop or Docker Engine if you want the containerized flow
+
+The default Compose setup uses Docker named volumes, so other developers do not
+need to edit machine-specific host paths before running the stack.
+
+Default volume names:
+
+- `codex-lb-data` for the main/runtime stack
+- `codex-lb-postgres-data` for the optional local PostgreSQL profile
+- `codex-lb-sandbox-data` for the sandbox stack in `docker-compose.sandbox.yml`
+
+If you need machine-specific bind mounts or other local-only Docker changes,
+put them in a local override file instead of editing the shared base compose:
+
+```bash
+cp docker-compose.override.example.yml docker-compose.override.yml
+```
+
+Example use cases for `docker-compose.override.yml`:
+
+- bind `/var/lib/codex-lb` to a host directory
+- add extra debugging env vars
+- change local-only ports or polling behavior
+
+The shared compose files should stay portable and repository-safe.
+
+### Validation
+
+Common local checks before pushing:
+
+```bash
+uvx ruff check .
+uvx ruff format --check .
+uv run pytest -q
+cd frontend && bun run lint
+cd frontend && bun run typecheck
+cd frontend && bun run test
+```
+
+### OpenSpec
+
+This repo uses OpenSpec as the source of truth for change-driven work.
+
+Run spec validation locally with:
+
+```bash
+npx -y @fission-ai/openspec validate --specs
+```
+
+The project does not require a globally installed `openspec` binary. The `npx` form downloads and runs the correct CLI on demand.
 
 ## Contributors ✨
 

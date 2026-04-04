@@ -7,13 +7,14 @@ import {
 } from "@/features/dashboard/utils";
 import type { RemainingItem } from "@/features/dashboard/utils";
 import type { AccountSummary, Depletion } from "@/features/dashboard/schemas";
-import { formatCompactAccountId } from "@/utils/account-identifiers";
 
 function account(overrides: Partial<AccountSummary> & Pick<AccountSummary, "accountId" | "email">): AccountSummary {
   return {
     accountId: overrides.accountId,
     email: overrides.email,
     displayName: overrides.displayName ?? overrides.email,
+    workspaceId: overrides.workspaceId ?? null,
+    workspaceName: overrides.workspaceName ?? null,
     planType: overrides.planType ?? "plus",
     status: overrides.status ?? "active",
     usage: overrides.usage ?? null,
@@ -224,13 +225,21 @@ describe("buildRemainingItems", () => {
     expect(items[1].label).toBe("two@example.com");
   });
 
-  it("appends compact account id only for duplicate emails", () => {
-    const duplicateA = "d48f0bfc-8ea6-48a7-8d76-d0e5ef1816c5_6f12b5d5";
-    const duplicateB = "7f9de2ad-7621-4a6f-88bc-ec7f3d914701_91a95cee";
+  it("appends workspace labels for email-based dashboard labels", () => {
     const items = buildRemainingItems(
       [
-        account({ accountId: duplicateA, email: "dup@example.com" }),
-        account({ accountId: duplicateB, email: "dup@example.com" }),
+        account({
+          accountId: "d48f0bfc-8ea6-48a7-8d76-d0e5ef1816c5_6f12b5d5",
+          email: "dup@example.com",
+          workspaceId: "ws_alpha",
+          workspaceName: "Alpha",
+        }),
+        account({
+          accountId: "7f9de2ad-7621-4a6f-88bc-ec7f3d914701_91a95cee",
+          email: "dup@example.com",
+          workspaceId: "ws_beta",
+          workspaceName: "Beta",
+        }),
         account({ accountId: "acc-3", email: "unique@example.com" }),
       ],
       null,
@@ -238,13 +247,27 @@ describe("buildRemainingItems", () => {
     );
 
     expect(items[0].label).toBe("dup@example.com");
-    expect(items[0].labelSuffix).toBe(` (${formatCompactAccountId(duplicateA, 5, 4)})`);
+    expect(items[0].labelSuffix).toBe(" | Alpha");
     expect(items[0].isEmail).toBe(true);
     expect(items[1].label).toBe("dup@example.com");
-    expect(items[1].labelSuffix).toBe(` (${formatCompactAccountId(duplicateB, 5, 4)})`);
+    expect(items[1].labelSuffix).toBe(" | Beta");
     expect(items[1].isEmail).toBe(true);
     expect(items[2].label).toBe("unique@example.com");
     expect(items[2].labelSuffix).toBe("");
     expect(items[2].isEmail).toBe(true);
+  });
+
+  it("falls back to a personal suffix for free accounts without a workspace name", () => {
+    const items = buildRemainingItems(
+      [
+        account({ accountId: "acc-1", email: "dup@example.com", workspaceId: "ws_1", planType: "free" }),
+        account({ accountId: "acc-2", email: "dup@example.com", workspaceId: "ws_2", planType: "free" }),
+      ],
+      null,
+      "primary",
+    );
+
+    expect(items[0].labelSuffix).toBe(" | Personal");
+    expect(items[1].labelSuffix).toBe(" | Personal");
   });
 });

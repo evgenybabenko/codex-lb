@@ -5,11 +5,9 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
 import type { AccountSummary } from "@/features/dashboard/schemas";
-import { formatCompactAccountId } from "@/utils/account-identifiers";
+import { formatWorkspaceLabel, formatWorkspaceTitle } from "@/utils/account-identifiers";
 import {
   normalizeStatus,
-  quotaBarColor,
-  quotaBarTrack,
 } from "@/utils/account-status";
 import { formatPercentNullable, formatQuotaResetLabel, formatSlug } from "@/utils/formatters";
 
@@ -21,48 +19,95 @@ export type AccountCardProps = {
   onAction?: (account: AccountSummary, action: AccountAction) => void;
 };
 
+function formatCardResetLabel(label: string): string {
+  return label.startsWith("in ") ? label.slice(3) : label;
+}
+
+function formatSubscriptionUntilLabel(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toISOString().slice(0, 10);
+}
+
 function QuotaBar({
   label,
   percent,
   resetLabel,
+  accent,
+  metaPosition,
 }: {
   label: string;
   percent: number | null;
   resetLabel: string;
+  accent: "blue" | "green";
+  metaPosition: "top" | "bottom";
 }) {
   const clamped = percent === null ? 0 : Math.max(0, Math.min(100, percent));
   const hasPercent = percent !== null;
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">{label}</span>
-        <span
-          className={cn(
-            "tabular-nums font-medium",
-            !hasPercent
-              ? "text-muted-foreground"
-              : clamped >= 70
-                ? "text-emerald-600 dark:text-emerald-400"
-                : clamped >= 30
-                  ? "text-amber-600 dark:text-amber-400"
-                  : "text-red-600 dark:text-red-400",
-          )}
-        >
-          {formatPercentNullable(percent)}
-        </span>
-      </div>
-      <div className={cn("h-1.5 w-full overflow-hidden rounded-full", quotaBarTrack(clamped))}>
-        <div
-          className={cn("h-full rounded-full transition-all duration-500 ease-out", quotaBarColor(clamped))}
-          style={{ width: `${clamped}%` }}
-        />
-      </div>
-      <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+  const isTopMeta = metaPosition === "top";
+  const accentClasses =
+    accent === "blue"
+      ? {
+          track: "bg-blue-500/15 dark:bg-blue-400/20",
+          fill: "bg-blue-500 dark:bg-blue-400",
+          text: "text-blue-600 dark:text-blue-400",
+        }
+      : {
+          track: "bg-emerald-500/15 dark:bg-emerald-400/20",
+          fill: "bg-emerald-500 dark:bg-emerald-400",
+          text: "text-emerald-600 dark:text-emerald-400",
+        };
+
+  const metaRow = (
+    <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+      <div className="flex min-w-0 items-center gap-1">
         <Clock className="h-3 w-3 shrink-0" />
-        <span>{resetLabel}</span>
+        <span className="truncate">{formatCardResetLabel(resetLabel)}</span>
       </div>
+      <span
+        className={cn(
+          "shrink-0 tabular-nums font-medium",
+          hasPercent ? accentClasses.text : "text-muted-foreground",
+        )}
+      >
+        {formatPercentNullable(percent)}
+      </span>
     </div>
   );
+
+  return (
+    <div className="space-y-0.5">
+      {isTopMeta ? <div className="pl-[1.55rem]">{metaRow}</div> : null}
+      <div className="grid grid-cols-[1.15rem_minmax(0,1fr)] items-center gap-x-1">
+        <div className={cn("text-[11px] font-semibold tracking-[0.04em]", accentClasses.text)}>
+          {label}
+        </div>
+        <div className={cn("h-1.5 w-full overflow-hidden rounded-full", accentClasses.track)}>
+          <div
+            className={cn("h-full rounded-full transition-all duration-500 ease-out", accentClasses.fill)}
+            style={{ width: `${clamped}%` }}
+          />
+        </div>
+      </div>
+      {!isTopMeta ? <div className="pl-[1.55rem]">{metaRow}</div> : null}
+    </div>
+  );
+}
+
+function formatAccountContextLabel(account: AccountSummary): string | null {
+  const workspaceLabel = formatWorkspaceLabel(account);
+  if (workspaceLabel && workspaceLabel !== "Workspace") {
+    return `Workspace | ${workspaceLabel}`;
+  }
+  if (account.planType.trim().toLowerCase() === "free") {
+    return "Personal | Free";
+  }
+  return workspaceLabel;
 }
 
 export function AccountCard({ account, showAccountId = false, onAction }: AccountCardProps) {
@@ -75,14 +120,16 @@ export function AccountCard({ account, showAccountId = false, onAction }: Accoun
   const primaryReset = formatQuotaResetLabel(account.resetAtPrimary ?? null);
   const secondaryReset = formatQuotaResetLabel(account.resetAtSecondary ?? null);
 
-  const title = account.displayName || account.email;
-  const compactId = formatCompactAccountId(account.accountId);
-  const planLabel = formatSlug(account.planType);
-  const emailSubtitle =
-    account.displayName && account.displayName !== account.email
-      ? account.email
-      : null;
-  const idSuffix = showAccountId ? ` | ID ${compactId}` : "";
+  const title = account.email;
+  const workspaceLabel = formatAccountContextLabel(account);
+  const workspaceTitle = formatWorkspaceTitle(account);
+  const subscriptionUntil = formatSubscriptionUntilLabel(account.auth?.subscriptionActiveUntil);
+  const subtitle = [
+    workspaceLabel ?? formatSlug(account.planType),
+    subscriptionUntil ? `until ${subscriptionUntil}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
 
   return (
     <div className="card-hover rounded-xl border bg-card p-4">
@@ -94,23 +141,34 @@ export function AccountCard({ account, showAccountId = false, onAction }: Accoun
               ? <span className="privacy-blur">{title}</span>
               : title}
           </p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {planLabel}
-            {!emailSubtitle ? idSuffix : ""}
+          <p
+            className="mt-0.5 truncate text-xs text-muted-foreground"
+            title={[workspaceTitle, showAccountId ? `Account ID ${account.accountId}` : null].filter(Boolean).join(" | ") || undefined}
+          >
+            {subtitle}
           </p>
-          {emailSubtitle ? (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground" title={showAccountId ? `Account ID ${account.accountId}` : undefined}>
-              <span className={blurred ? "privacy-blur" : undefined}>{emailSubtitle}</span>{showAccountId ? ` | ID ${compactId}` : ""}
-            </p>
-          ) : null}
         </div>
         <StatusBadge status={status} />
       </div>
 
       {/* Quota bars */}
-      <div className={cn("mt-3.5 grid gap-3", weeklyOnly ? "grid-cols-1" : "grid-cols-2")}>
-        {!weeklyOnly && <QuotaBar label="5h" percent={primaryRemaining} resetLabel={primaryReset} />}
-        <QuotaBar label="Weekly" percent={secondaryRemaining} resetLabel={secondaryReset} />
+      <div className="mt-3.5 space-y-0">
+        {!weeklyOnly && (
+          <QuotaBar
+            label="5h"
+            percent={primaryRemaining}
+            resetLabel={primaryReset}
+            accent="blue"
+            metaPosition="top"
+          />
+        )}
+        <QuotaBar
+          label="7d"
+          percent={secondaryRemaining}
+          resetLabel={secondaryReset}
+          accent="green"
+          metaPosition="bottom"
+        />
       </div>
 
       {/* Actions */}

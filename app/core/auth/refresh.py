@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import aiohttp
 from pydantic import ValidationError
 
-from app.core.auth import OpenAIAuthClaims, extract_id_token_claims
+from app.core.auth import OpenAIAuthClaims, extract_id_token_claims, workspace_identity_from_claims
 from app.core.auth.models import OAuthTokenPayload
 from app.core.balancer import PERMANENT_FAILURE_CODES
 from app.core.clients.http import get_http_client
@@ -34,6 +34,8 @@ class TokenRefreshResult:
     account_id: str | None
     plan_type: str | None
     email: str | None
+    workspace_id: str | None
+    workspace_name: str | None
 
 
 class RefreshError(Exception):
@@ -103,6 +105,7 @@ async def refresh_access_token(
     account_id = auth_claims.chatgpt_account_id or claims.chatgpt_account_id
     plan_type = auth_claims.chatgpt_plan_type or claims.chatgpt_plan_type
     email = claims.email
+    workspace_id, workspace_name = workspace_identity_from_claims(claims)
 
     return TokenRefreshResult(
         access_token=payload_data.access_token,
@@ -111,6 +114,8 @@ async def refresh_access_token(
         account_id=account_id,
         plan_type=plan_type,
         email=email,
+        workspace_id=workspace_id,
+        workspace_name=workspace_name,
     )
 
 

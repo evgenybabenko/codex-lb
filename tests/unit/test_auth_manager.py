@@ -37,6 +37,8 @@ class _DummyRepo:
         plan_type: str | None = None,
         email: str | None = None,
         chatgpt_account_id: str | None = None,
+        workspace_id: str | None = None,
+        workspace_name: str | None = None,
     ) -> bool:
         self.tokens_payload = {
             "account_id": account_id,
@@ -47,6 +49,8 @@ class _DummyRepo:
             "plan_type": plan_type,
             "email": email,
             "chatgpt_account_id": chatgpt_account_id,
+            "workspace_id": workspace_id,
+            "workspace_name": workspace_name,
         }
         return True
 
@@ -61,6 +65,8 @@ async def test_refresh_account_preserves_plan_type_when_missing(monkeypatch):
             account_id="acc_1",
             plan_type=None,
             email=None,
+            workspace_id=None,
+            workspace_name=None,
         )
 
     monkeypatch.setattr(auth_manager_module, "refresh_access_token", _fake_refresh)

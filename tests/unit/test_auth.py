@@ -1,14 +1,13 @@
-from __future__ import annotations
-
 import base64
 import json
 import os
 import stat
+from datetime import datetime, timezone
 
 import pytest
 from cryptography.fernet import InvalidToken
 
-from app.core.auth import claims_from_auth, extract_id_token_claims, parse_auth_json
+from app.core.auth import claims_from_auth, extract_id_token_claims, generate_unique_account_id, parse_auth_json
 from app.core.crypto import TokenEncryptor, get_or_create_key
 
 pytestmark = pytest.mark.unit
@@ -21,11 +20,24 @@ def _encode_jwt(payload: dict) -> str:
 
 
 def test_extract_id_token_claims_valid_payload():
-    payload = {"email": "user@example.com", "chatgpt_account_id": "acc_123"}
+    payload = {
+        "email": "user@example.com",
+        "chatgpt_account_id": "acc_123",
+        "https://api.openai.com/auth.chatgpt_subscription_active_until": "2026-04-17T10:48:54+00:00",
+    }
     token = _encode_jwt(payload)
     claims = extract_id_token_claims(token)
     assert claims.email == "user@example.com"
     assert claims.chatgpt_account_id == "acc_123"
+    assert claims.chatgpt_subscription_active_until == datetime(
+        2026,
+        4,
+        17,
+        10,
+        48,
+        54,
+        tzinfo=timezone.utc,
+    )
 
 
 def test_claims_from_auth_prefers_token_account_id():
@@ -49,6 +61,44 @@ def test_claims_from_auth_prefers_token_account_id():
     assert claims.account_id == "acc_explicit"
     assert claims.email == "user@example.com"
     assert claims.plan_type == "plus"
+
+
+def test_claims_from_auth_extracts_workspace_identity():
+    payload = {
+        "email": "user@example.com",
+        "chatgpt_account_id": "acc_payload",
+        "https://api.openai.com/auth": {
+            "chatgpt_plan_type": "plus",
+            "organizations": [
+                {"id": "org_other", "name": "Other workspace"},
+                {"id": "org_default", "name": "Default workspace", "default": True},
+            ],
+        },
+    }
+    token = _encode_jwt(payload)
+    auth_json = {
+        "tokens": {
+            "idToken": token,
+            "accessToken": "access",
+            "refreshToken": "refresh",
+            "accountId": "acc_explicit",
+        }
+    }
+
+    auth = parse_auth_json(json.dumps(auth_json).encode("utf-8"))
+    claims = claims_from_auth(auth)
+
+    assert claims.workspace_id == "org_default"
+    assert claims.workspace_name == "Default workspace"
+
+
+def test_generate_unique_account_id_includes_workspace_suffix():
+    first = generate_unique_account_id("acc_shared", "user@example.com", "org_alpha")
+    second = generate_unique_account_id("acc_shared", "user@example.com", "org_beta")
+
+    assert first != second
+    assert first.startswith("acc_shared_")
+    assert second.startswith("acc_shared_")
 
 
 def test_key_file_permissions_and_reuse(temp_key_file):

@@ -2,7 +2,7 @@ import { Activity, AlertTriangle, Coins, DollarSign } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { buildDonutPalette } from "@/utils/colors";
-import { buildDuplicateAccountIdSet, formatCompactAccountId } from "@/utils/account-identifiers";
+import { formatWorkspaceLabel } from "@/utils/account-identifiers";
 import {
   formatCachedTokensMeta,
   formatCompactNumber,
@@ -75,6 +75,20 @@ function isWeeklyOnlyAccount(account: AccountSummary): boolean {
   return account.windowMinutesPrimary == null && account.windowMinutesSecondary != null;
 }
 
+function formatWorkspaceSuffix(account: Pick<AccountSummary, "workspaceId" | "workspaceName" | "planType">): string {
+  const workspaceLabel = formatWorkspaceLabel(account);
+  if (workspaceLabel && workspaceLabel !== "Workspace") {
+    return ` | ${workspaceLabel}`;
+  }
+  if (account.planType.trim().toLowerCase() === "free") {
+    return " | Personal";
+  }
+  if (!workspaceLabel) {
+    return "";
+  }
+  return ` | ${workspaceLabel}`;
+}
+
 function accountRemainingPercent(account: AccountSummary, windowKey: "primary" | "secondary"): number | null {
   if (windowKey === "secondary") {
     return account.usage?.secondaryRemainingPercent ?? null;
@@ -126,7 +140,6 @@ export function buildRemainingItems(
 ): RemainingItem[] {
   const usageIndex = buildWindowIndex(window);
   const palette = buildDonutPalette(accounts.length, isDark);
-  const duplicateAccountIds = buildDuplicateAccountIdSet(accounts);
 
   return accounts
     .map((account, index) => {
@@ -136,9 +149,7 @@ export function buildRemainingItems(
       const remaining = usageIndex.get(account.accountId) ?? 0;
       const rawLabel = account.displayName || account.email || account.accountId;
       const labelIsEmail = !!account.email && rawLabel === account.email;
-      const labelSuffix = duplicateAccountIds.has(account.accountId)
-        ? ` (${formatCompactAccountId(account.accountId, 5, 4)})`
-        : "";
+      const labelSuffix = labelIsEmail ? formatWorkspaceSuffix(account) : "";
       return {
         accountId: account.accountId,
         label: rawLabel,

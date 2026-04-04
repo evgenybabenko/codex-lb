@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 
 from app.core import usage as usage_core
@@ -8,6 +9,7 @@ from app.core.usage.types import UsageWindowRow
 from app.core.utils.time import utcnow
 from app.db.models import UsageHistory
 from app.modules.accounts.mappers import build_account_summaries
+from app.modules.accounts.openai_account_labels import fetch_account_labels
 from app.modules.dashboard.repository import DashboardRepository
 from app.modules.dashboard.schemas import (
     DashboardOverviewResponse,
@@ -32,16 +34,22 @@ class DashboardService:
 
     async def get_overview(self) -> DashboardOverviewResponse:
         now = utcnow()
-        accounts = await self._repo.list_accounts()
-        primary_usage = await self._repo.latest_usage_by_account("primary")
-        secondary_usage = await self._repo.latest_usage_by_account("secondary")
+        accounts, primary_usage, secondary_usage, additional_ts = await asyncio.gather(
+            self._repo.list_accounts(),
+            self._repo.latest_usage_by_account("primary"),
+            self._repo.latest_usage_by_account("secondary"),
+            self._repo.latest_additional_recorded_at(),
+        )
+        workspace_labels_by_account_id = await self._fetch_workspace_labels(accounts)
 
         account_summaries = build_account_summaries(
             accounts=accounts,
             primary_usage=primary_usage,
             secondary_usage=secondary_usage,
+            workspace_labels_by_account_id=workspace_labels_by_account_id,
             encryptor=self._encryptor,
             include_auth=False,
+            include_subscription_metadata=True,
         )
 
         primary_rows_raw = _rows_from_latest(primary_usage)
@@ -189,7 +197,6 @@ class DashboardService:
 
         pri_depletion, sec_depletion = _build_depletion_by_window(primary_history, secondary_history, now)
 
-        additional_ts = await self._repo.latest_additional_recorded_at()
         return DashboardOverviewResponse(
             last_sync_at=_latest_recorded_at(primary_usage, secondary_usage, additional_ts),
             accounts=account_summaries,
@@ -199,6 +206,56 @@ class DashboardService:
             depletion_primary=pri_depletion,
             depletion_secondary=sec_depletion,
         )
+
+    async def _fetch_workspace_labels(
+        self,
+        accounts,
+    ) -> dict[str, str]:
+        accounts_by_email: dict[str, list] = {}
+        for account in accounts:
+            if not account.chatgpt_account_id or account.workspace_name:
+                continue
+            accounts_by_email.setdefault(account.email.strip().lower(), []).append(account)
+
+        if not accounts_by_email:
+            return {}
+
+        labels_by_account_id: dict[str, str] = {}
+        for grouped_accounts in accounts_by_email.values():
+            access_token: str | None = None
+            for account in grouped_accounts:
+                try:
+                    access_token = self._encryptor.decrypt(account.access_token_encrypted)
+                except Exception:
+                    continue
+                if access_token:
+                    break
+
+            if not access_token:
+                continue
+
+            try:
+                fetched_labels = await asyncio.wait_for(fetch_account_labels(access_token), timeout=0.75)
+            except TimeoutError:
+                continue
+
+            for account in grouped_accounts:
+                chatgpt_account_id = account.chatgpt_account_id
+                if not chatgpt_account_id or chatgpt_account_id not in fetched_labels:
+                    continue
+                workspace_name = fetched_labels[chatgpt_account_id].strip()
+                if not workspace_name:
+                    continue
+                labels_by_account_id[account.id] = workspace_name
+                if account.workspace_name == workspace_name:
+                    continue
+                await self._repo.update_account_workspace_name(
+                    account.id,
+                    workspace_id=account.workspace_id,
+                    workspace_name=workspace_name,
+                )
+
+        return labels_by_account_id
 
 
 def _build_depletion_by_window(

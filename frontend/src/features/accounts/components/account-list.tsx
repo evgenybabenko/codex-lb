@@ -11,6 +11,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AccountListItem } from "@/features/accounts/components/account-list-item";
+import {
+  sortAccounts,
+  type SortOption,
+} from "@/features/accounts/components/account-list-sorting";
 import { WindowsOauthHelp } from "@/features/accounts/components/windows-oauth-help";
 import type { AccountSummary } from "@/features/accounts/schemas";
 import { buildDuplicateAccountIdSet } from "@/utils/account-identifiers";
@@ -35,11 +39,12 @@ export function AccountList({
 }: AccountListProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<SortOption>("email_asc");
   const [helpOpen, setHelpOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return accounts.filter((account) => {
+    const filteredAccounts = accounts.filter((account) => {
       if (statusFilter !== "all" && account.status !== statusFilter) {
         return false;
       }
@@ -49,10 +54,14 @@ export function AccountList({
       return (
         account.email.toLowerCase().includes(needle) ||
         account.accountId.toLowerCase().includes(needle) ||
-        account.planType.toLowerCase().includes(needle)
+        account.planType.toLowerCase().includes(needle) ||
+        (account.workspaceId?.toLowerCase().includes(needle) ?? false) ||
+        (account.workspaceName?.toLowerCase().includes(needle) ?? false)
       );
     });
-  }, [accounts, search, statusFilter]);
+
+    return sortAccounts(filteredAccounts, sortBy);
+  }, [accounts, search, sortBy, statusFilter]);
 
   const duplicateAccountIds = useMemo(() => buildDuplicateAccountIdSet(accounts), [accounts]);
 
@@ -73,11 +82,22 @@ export function AccountList({
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            {STATUS_FILTER_OPTIONS.map((option) => (
+            {STATUS_FILTER_OPTIONS.map((option: string) => (
               <SelectItem key={option} value={option}>
                 {option === "all" ? "All statuses" : formatSlug(option)}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+          <SelectTrigger size="sm" className="w-40 shrink-0">
+            <SelectValue placeholder="Sort" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="email_asc">Email A-Z</SelectItem>
+            <SelectItem value="workspace_asc">Workspace A-Z</SelectItem>
+            <SelectItem value="remaining_desc">Most remaining</SelectItem>
+            <SelectItem value="remaining_asc">Least remaining</SelectItem>
           </SelectContent>
         </Select>
       </div>

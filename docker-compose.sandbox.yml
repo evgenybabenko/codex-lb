@@ -1,0 +1,64 @@
+name: codex-lb-sandbox
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.local
+    ports:
+      - "2456:2455"
+    command:
+      - fastapi
+      - run
+      - app/main.py
+      - --host
+      - 0.0.0.0
+      - --port
+      - "2455"
+      - --reload
+    volumes:
+      - codex-lb-sandbox-data:/var/lib/codex-lb
+    develop:
+      watch:
+        - action: sync
+          path: ./app
+          target: /app/app
+        - action: rebuild
+          path: ./pyproject.toml
+        - action: rebuild
+          path: ./uv.lock
+        - action: rebuild
+          path: ./Dockerfile
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile_inline: |
+        FROM oven/bun:1.3.7-alpine
+        WORKDIR /app
+        COPY package.json bun.lock ./
+        RUN bun install --frozen-lockfile
+        COPY . .
+        CMD ["bun", "run", "dev", "--host", "0.0.0.0"]
+    ports:
+      - "5174:5173"
+    environment:
+      API_PROXY_TARGET: http://server:2455
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend
+          target: /app
+          ignore:
+            - node_modules/
+        - action: rebuild
+          path: ./frontend/package.json
+        - action: rebuild
+          path: ./frontend/bun.lock
+
+volumes:
+  codex-lb-sandbox-data:
+    name: codex-lb-sandbox-data

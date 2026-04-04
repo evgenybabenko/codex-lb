@@ -6,17 +6,20 @@ import { useOauth } from "@/features/accounts/hooks/use-oauth";
 const startOauthMock = vi.fn();
 const completeOauthMock = vi.fn();
 const submitManualOauthCallbackMock = vi.fn();
+const getOauthStatusMock = vi.fn();
 
 vi.mock("@/features/accounts/api", () => ({
   startOauth: (...args: unknown[]) => startOauthMock(...args),
   completeOauth: (...args: unknown[]) => completeOauthMock(...args),
   submitManualOauthCallback: (...args: unknown[]) => submitManualOauthCallbackMock(...args),
-  getOauthStatus: vi.fn().mockResolvedValue({ status: "pending", errorMessage: null }),
+  getOauthStatus: (...args: unknown[]) => getOauthStatusMock(...args),
 }));
 
 describe("useOauth", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
+    getOauthStatusMock.mockResolvedValue({ status: "pending", errorMessage: null });
   });
 
   it("starts device polling immediately after device OAuth start", async () => {
@@ -64,6 +67,42 @@ describe("useOauth", () => {
     });
 
     expect(completeOauthMock).not.toHaveBeenCalled();
+  });
+
+  it("polls browser OAuth status until the backend reports success", async () => {
+    vi.useFakeTimers();
+    startOauthMock.mockResolvedValue({
+      method: "browser",
+      authorizationUrl: "https://auth.example.com/authorize",
+      callbackUrl: "http://127.0.0.1:1455/auth/callback",
+      verificationUrl: null,
+      userCode: null,
+      deviceAuthId: null,
+      intervalSeconds: null,
+      expiresInSeconds: null,
+    });
+    getOauthStatusMock
+      .mockResolvedValueOnce({ status: "pending", errorMessage: null })
+      .mockResolvedValueOnce({ status: "success", errorMessage: null });
+
+    const { result } = renderHook(() => useOauth());
+
+    await act(async () => {
+      await result.current.start("browser");
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+
+    expect(getOauthStatusMock).toHaveBeenCalledTimes(2);
+    expect(result.current.state.status).toBe("success");
   });
 
   it("updates state to success after a successful manual callback", async () => {
