@@ -4,7 +4,7 @@ import { usePrivacyStore } from "@/hooks/use-privacy";
 import { StatusBadge } from "@/components/status-badge";
 import type { AccountSummary } from "@/features/accounts/schemas";
 import { normalizeStatus, quotaBarColor, quotaBarTrack } from "@/utils/account-status";
-import { formatCompactAccountId } from "@/utils/account-identifiers";
+import { formatWorkspaceLabel, formatWorkspaceTitle } from "@/utils/account-identifiers";
 import { formatSlug } from "@/utils/formatters";
 
 export type AccountListItemProps = {
@@ -33,13 +33,12 @@ function MiniQuotaBar({ percent }: { percent: number | null }) {
 export function AccountListItem({ account, selected, showAccountId = false, onSelect }: AccountListItemProps) {
   const blurred = usePrivacyStore((s) => s.blurred);
   const status = normalizeStatus(account.status);
-  const title = account.displayName || account.email;
+  const title = account.email;
   const titleIsEmail = isEmailLabel(title, account.email);
-  const emailSubtitle = account.displayName && account.displayName !== account.email
-    ? account.email
-    : null;
-  const baseSubtitle = emailSubtitle ?? formatSlug(account.planType);
-  const idSuffix = showAccountId ? ` | ID ${formatCompactAccountId(account.accountId)}` : "";
+  const workspaceLabel = formatWorkspaceLabel(account);
+  const workspaceTitle = formatWorkspaceTitle(account);
+  const planLabel = formatSlug(account.planType);
+  const baseSubtitle = workspaceLabel ? `${planLabel} | ${workspaceLabel}` : planLabel;
   const secondary = account.usage?.secondaryRemainingPercent ?? null;
 
   return (
@@ -58,8 +57,11 @@ export function AccountListItem({ account, selected, showAccountId = false, onSe
           <p className="truncate text-sm font-medium">
             {titleIsEmail && blurred ? <span className="privacy-blur">{title}</span> : title}
           </p>
-          <p className="truncate text-xs text-muted-foreground" title={showAccountId ? `Account ID ${account.accountId}` : undefined}>
-            {emailSubtitle ? <><span className={blurred ? "privacy-blur" : undefined}>{emailSubtitle}</span>{idSuffix}</> : <>{baseSubtitle}{idSuffix}</>}
+          <p
+            className="truncate text-xs text-muted-foreground"
+            title={[workspaceTitle, showAccountId ? `Account ID ${account.accountId}` : null].filter(Boolean).join(" | ") || undefined}
+          >
+            {baseSubtitle}
           </p>
         </div>
         <StatusBadge status={status} />

@@ -15,6 +15,7 @@ import type { OAuthState } from "@/features/accounts/schemas";
 import { formatCountdown } from "@/utils/formatters";
 
 type Stage = "intro" | "browser" | "device" | "success" | "error";
+const SUCCESS_AUTO_CLOSE_DELAY_MS = 1500;
 
 function getStage(state: OAuthState): Stage {
   if (state.status === "success") return "success";
@@ -126,6 +127,13 @@ export function OauthDialog({
   const [selectedMethod, setSelectedMethod] = useState<"browser" | "device">("browser");
   const stage = getStage(state);
   const completedRef = useRef(false);
+  const close = useCallback((next: boolean) => {
+    onOpenChange(next);
+    if (!next) {
+      onReset();
+      setSelectedMethod("browser");
+    }
+  }, [onOpenChange, onReset]);
 
   useEffect(() => {
     if (stage === "success" && !completedRef.current) {
@@ -137,13 +145,17 @@ export function OauthDialog({
     }
   }, [stage, onComplete]);
 
-  const close = (next: boolean) => {
-    onOpenChange(next);
-    if (!next) {
-      onReset();
-      setSelectedMethod("browser");
+  useEffect(() => {
+    if (stage !== "success" || !open) {
+      return;
     }
-  };
+
+    const timeoutId = window.setTimeout(() => {
+      close(false);
+    }, SUCCESS_AUTO_CLOSE_DELAY_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [close, open, stage]);
 
   const handleStart = () => {
     void onStart(selectedMethod);
@@ -266,7 +278,7 @@ export function OauthDialog({
         {stage === "success" ? (
           <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-sm text-emerald-700 dark:text-emerald-400">
             <Check className="h-4 w-4 shrink-0" />
-            <p>Account has been added successfully.</p>
+            <p>Account added successfully. Closing this dialog...</p>
           </div>
         ) : null}
 

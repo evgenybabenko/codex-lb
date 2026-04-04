@@ -3,7 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from app.core import usage as usage_core
-from app.core.auth import DEFAULT_PLAN, extract_id_token_claims
+from app.core.auth import (
+    DEFAULT_PLAN,
+    extract_id_token_claims,
+    normalize_workspace_identity,
+    workspace_identity_from_claims,
+)
 from app.core.crypto import TokenEncryptor
 from app.core.plan_types import coerce_account_plan_type
 from app.core.usage.types import UsageTrendBucket, UsageWindowRow
@@ -28,8 +33,10 @@ def build_account_summaries(
     secondary_usage: dict[str, UsageHistory],
     request_usage_by_account: dict[str, AccountRequestUsage] | None = None,
     additional_quotas_by_account: dict[str, list[AccountAdditionalQuota]] | None = None,
+    workspace_labels_by_account_id: dict[str, str] | None = None,
     encryptor: TokenEncryptor,
     include_auth: bool = True,
+    include_subscription_metadata: bool = False,
 ) -> list[AccountSummary]:
     return [
         _account_to_summary(
@@ -38,8 +45,10 @@ def build_account_summaries(
             secondary_usage.get(account.id),
             request_usage_by_account.get(account.id) if request_usage_by_account else None,
             additional_quotas_by_account.get(account.id) if additional_quotas_by_account else None,
+            workspace_labels_by_account_id.get(account.id) if workspace_labels_by_account_id else None,
             encryptor,
             include_auth=include_auth,
+            include_subscription_metadata=include_subscription_metadata,
         )
         for account in accounts
     ]
@@ -51,11 +60,23 @@ def _account_to_summary(
     secondary_usage: UsageHistory | None,
     request_usage: AccountRequestUsage | None,
     additional_quotas: list[AccountAdditionalQuota] | None,
+    upstream_workspace_label: str | None,
     encryptor: TokenEncryptor,
     include_auth: bool = True,
+    include_subscription_metadata: bool = False,
 ) -> AccountSummary:
     plan_type = coerce_account_plan_type(account.plan_type, DEFAULT_PLAN)
-    auth_status = _build_auth_status(account, encryptor) if include_auth else None
+    workspace_id, workspace_name = _resolve_workspace_metadata(
+        account,
+        encryptor,
+        upstream_workspace_label,
+    )
+    if include_auth:
+        auth_status = _build_auth_status(account, encryptor)
+    elif include_subscription_metadata:
+        auth_status = _build_subscription_metadata(account, encryptor)
+    else:
+        auth_status = None
     effective_primary_usage, effective_secondary_usage = _effective_usage_windows(
         primary_usage,
         secondary_usage,
@@ -98,6 +119,8 @@ def _account_to_summary(
         account_id=account.id,
         email=account.email,
         display_name=account.email,
+        workspace_id=workspace_id,
+        workspace_name=workspace_name,
         plan_type=plan_type,
         status=account.status.value,
         usage=AccountUsage(
@@ -153,15 +176,69 @@ def _build_auth_status(account: Account, encryptor: TokenEncryptor) -> AccountAu
     access_expires = _token_expiry(access_token)
     refresh_state = "stored" if refresh_token else "missing"
     id_state = "unknown"
+    subscription_active_start = None
+    subscription_active_until = None
+    subscription_last_checked = None
     if id_token:
         claims = extract_id_token_claims(id_token)
         if claims.model_dump(exclude_none=True):
             id_state = "parsed"
+        subscription_active_start = claims.chatgpt_subscription_active_start
+        subscription_active_until = claims.chatgpt_subscription_active_until
+        subscription_last_checked = claims.chatgpt_subscription_last_checked
 
     return AccountAuthStatus(
         access=AccountTokenStatus(expires_at=access_expires),
         refresh=AccountTokenStatus(state=refresh_state),
         id_token=AccountTokenStatus(state=id_state),
+        subscription_active_start=subscription_active_start,
+        subscription_active_until=subscription_active_until,
+        subscription_last_checked=subscription_last_checked,
+    )
+
+
+def _build_subscription_metadata(account: Account, encryptor: TokenEncryptor) -> AccountAuthStatus | None:
+    id_token = _decrypt_token(encryptor, account.id_token_encrypted)
+    if not id_token:
+        return None
+
+    claims = extract_id_token_claims(id_token)
+    subscription_active_start = claims.chatgpt_subscription_active_start
+    subscription_active_until = claims.chatgpt_subscription_active_until
+    subscription_last_checked = claims.chatgpt_subscription_last_checked
+    if not any((subscription_active_start, subscription_active_until, subscription_last_checked)):
+        return None
+
+    return AccountAuthStatus(
+        subscription_active_start=subscription_active_start,
+        subscription_active_until=subscription_active_until,
+        subscription_last_checked=subscription_last_checked,
+    )
+
+
+def _resolve_workspace_metadata(
+    account: Account,
+    encryptor: TokenEncryptor,
+    upstream_workspace_label: str | None,
+) -> tuple[str | None, str | None]:
+    stored_workspace_id, stored_workspace_name = normalize_workspace_identity(
+        account.workspace_id,
+        account.workspace_name,
+    )
+    id_token = _decrypt_token(encryptor, account.id_token_encrypted)
+    token_workspace_id = None
+    token_workspace_name = None
+    if id_token:
+        claims = extract_id_token_claims(id_token)
+        token_workspace_id, token_workspace_name = workspace_identity_from_claims(
+            claims,
+        )
+
+    effective_workspace_id = stored_workspace_id or token_workspace_id
+    effective_workspace_name = stored_workspace_name or upstream_workspace_label or token_workspace_name
+    return normalize_workspace_identity(
+        effective_workspace_id,
+        effective_workspace_name,
     )
 
 

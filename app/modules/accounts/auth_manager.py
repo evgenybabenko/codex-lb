@@ -33,6 +33,8 @@ class AccountsRepositoryPort(Protocol):
         plan_type: str | None = None,
         email: str | None = None,
         chatgpt_account_id: str | None = None,
+        workspace_id: str | None = None,
+        workspace_name: str | None = None,
     ) -> bool: ...
 
 
@@ -67,6 +69,9 @@ class AuthManager:
         account.last_refresh = utcnow()
         if result.account_id:
             account.chatgpt_account_id = result.account_id
+        if result.workspace_id is not None or result.workspace_name is not None:
+            account.workspace_id = result.workspace_id
+            account.workspace_name = result.workspace_name
         if result.plan_type is not None:
             account.plan_type = coerce_account_plan_type(
                 result.plan_type,
@@ -86,6 +91,8 @@ class AuthManager:
             plan_type=account.plan_type,
             email=account.email,
             chatgpt_account_id=account.chatgpt_account_id,
+            workspace_id=account.workspace_id,
+            workspace_name=account.workspace_name,
         )
         return account
 
@@ -111,6 +118,8 @@ class AuthManager:
                 plan_type=account.plan_type,
                 email=account.email,
                 chatgpt_account_id=raw_account_id,
+                workspace_id=account.workspace_id,
+                workspace_name=account.workspace_name,
             )
         except Exception:
             logger.warning("Failed to persist chatgpt_account_id account_id=%s", account.id, exc_info=True)

@@ -7,7 +7,7 @@ import { AccountTokenInfo } from "@/features/accounts/components/account-token-i
 import { AccountUsagePanel } from "@/features/accounts/components/account-usage-panel";
 import type { AccountSummary } from "@/features/accounts/schemas";
 import { useAccountTrends } from "@/features/accounts/hooks/use-accounts";
-import { formatCompactAccountId } from "@/utils/account-identifiers";
+import { formatWorkspaceLabel, formatWorkspaceTitle } from "@/utils/account-identifiers";
 
 export type AccountDetailProps = {
   account: AccountSummary | null;
@@ -43,26 +43,25 @@ export function AccountDetail({
     );
   }
 
-  const title = account.displayName || account.email;
+  const title = account.email;
   const titleIsEmail = isEmailLabel(title, account.email);
-  const compactId = formatCompactAccountId(account.accountId);
-  const emailSubtitle = account.displayName && account.displayName !== account.email
-    ? account.email
-    : null;
-  const idSuffix = showAccountId ? ` (${compactId})` : "";
+  const workspaceLabel = formatWorkspaceLabel(account);
+  const workspaceTitle = formatWorkspaceTitle(account);
+  const planLabel = account.planType;
 
   return (
     <div key={account.accountId} className="animate-fade-in-up space-y-4 rounded-xl border bg-card p-5">
       {/* Account header */}
       <div>
         <h2 className="text-base font-semibold">
-          {titleIsEmail ? <><span className={blurred ? "privacy-blur" : ""}>{title}</span>{idSuffix}</> : <>{title}{!emailSubtitle ? idSuffix : ""}</>}
+          {titleIsEmail ? <span className={blurred ? "privacy-blur" : ""}>{title}</span> : title}
         </h2>
-        {emailSubtitle ? (
-          <p className="mt-0.5 text-xs text-muted-foreground" title={showAccountId ? `Account ID ${account.accountId}` : undefined}>
-            <span className={blurred ? "privacy-blur" : ""}>{emailSubtitle}</span>{showAccountId ? ` | ID ${compactId}` : ""}
-          </p>
-        ) : null}
+        <p
+          className="mt-0.5 text-xs text-muted-foreground"
+          title={[workspaceTitle, showAccountId ? `Account ID ${account.accountId}` : null].filter(Boolean).join(" | ") || undefined}
+        >
+          {workspaceLabel ? `${planLabel} | ${workspaceLabel}` : planLabel}
+        </p>
       </div>
 
       <AccountUsagePanel account={account} trends={trends} />

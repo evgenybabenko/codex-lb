@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { AccountList } from "@/features/accounts/components/account-list";
+import { sortAccounts } from "@/features/accounts/components/account-list-sorting";
 
 describe("AccountList", () => {
   it("renders items and filters by search", async () => {
@@ -109,9 +110,69 @@ describe("AccountList", () => {
       />,
     );
 
-    expect(screen.getByText((_content, el) => el?.tagName === "P" && !!el.textContent?.match(/dup@example\.com \| ID d48f0bfc\.\.\.12b5d5/))).toBeInTheDocument();
-    expect(screen.getByText((_content, el) => el?.tagName === "P" && !!el.textContent?.match(/dup@example\.com \| ID 7f9de2ad\.\.\.a95cee/))).toBeInTheDocument();
+    const duplicateButtons = screen
+      .getAllByRole("button")
+      .filter((element) => element.textContent?.includes("dup@example.com"));
+    expect(duplicateButtons[0]?.textContent).not.toContain(" | ID ");
+    expect(duplicateButtons[1]?.textContent).not.toContain(" | ID ");
     expect(screen.getByText("unique@example.com")).toBeInTheDocument();
-    expect(screen.queryByText((_content, el) => el?.tagName === "P" && !!el.textContent?.match(/unique@example\.com \| ID/))).not.toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole("button")
+        .filter((element) => element.textContent?.includes("unique@example.com"))[0]?.textContent,
+    ).not.toContain(" | ID ");
+  });
+
+  it("sorts accounts by workspace and remaining quota", async () => {
+    const accounts = [
+      {
+        accountId: "acc-1",
+        email: "charlie@example.com",
+        displayName: "Charlie",
+        workspaceName: "Zulu",
+        planType: "team",
+        status: "active",
+        usage: { primaryRemainingPercent: 30, secondaryRemainingPercent: 45 },
+        additionalQuotas: [],
+      },
+      {
+        accountId: "acc-2",
+        email: "alpha@example.com",
+        displayName: "Alpha",
+        workspaceName: "Alpha",
+        planType: "team",
+        status: "active",
+        usage: { primaryRemainingPercent: 60, secondaryRemainingPercent: 70 },
+        additionalQuotas: [],
+      },
+      {
+        accountId: "acc-3",
+        email: "bravo@example.com",
+        displayName: "Bravo",
+        workspaceName: "Bravo",
+        planType: "team",
+        status: "active",
+        usage: { primaryRemainingPercent: 10, secondaryRemainingPercent: 20 },
+        additionalQuotas: [],
+      },
+    ];
+
+    expect(sortAccounts(accounts, "email_asc").map((account) => account.email)).toEqual([
+      "alpha@example.com",
+      "bravo@example.com",
+      "charlie@example.com",
+    ]);
+
+    expect(sortAccounts(accounts, "workspace_asc").map((account) => account.email)).toEqual([
+      "alpha@example.com",
+      "bravo@example.com",
+      "charlie@example.com",
+    ]);
+
+    expect(sortAccounts(accounts, "remaining_asc").map((account) => account.email)).toEqual([
+      "bravo@example.com",
+      "charlie@example.com",
+      "alpha@example.com",
+    ]);
   });
 });

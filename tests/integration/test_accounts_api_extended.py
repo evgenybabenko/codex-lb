@@ -25,11 +25,33 @@ def _encode_jwt(payload: dict) -> str:
     return f"header.{body}.sig"
 
 
-def _make_auth_json(account_id: str | None, email: str, plan_type: str = "plus") -> dict:
+def _make_auth_json(
+    account_id: str | None,
+    email: str,
+    plan_type: str = "plus",
+    workspace_id: str | None = None,
+    workspace_name: str | None = None,
+    subscription_active_start: str | None = None,
+    subscription_active_until: str | None = None,
+    subscription_last_checked: str | None = None,
+) -> dict:
+    auth_payload: dict[str, object] = {"chatgpt_plan_type": plan_type}
+    if workspace_id:
+        workspace_entry: dict[str, object] = {"id": workspace_id, "default": True}
+        if workspace_name:
+            workspace_entry["name"] = workspace_name
+        auth_payload["organizations"] = [workspace_entry]
+
     payload = {
         "email": email,
-        "https://api.openai.com/auth": {"chatgpt_plan_type": plan_type},
+        "https://api.openai.com/auth": auth_payload,
     }
+    if subscription_active_start:
+        payload["https://api.openai.com/auth.chatgpt_subscription_active_start"] = subscription_active_start
+    if subscription_active_until:
+        payload["https://api.openai.com/auth.chatgpt_subscription_active_until"] = subscription_active_until
+    if subscription_last_checked:
+        payload["https://api.openai.com/auth.chatgpt_subscription_last_checked"] = subscription_last_checked
     if account_id:
         payload["chatgpt_account_id"] = account_id
     tokens: dict[str, object] = {
@@ -134,6 +156,431 @@ async def test_import_overwrites_by_default_for_same_account_identity(async_clie
     assert len(accounts) == 1
     assert accounts[0]["accountId"] == expected_account_id
     assert accounts[0]["planType"] == "team"
+
+
+@pytest.mark.asyncio
+async def test_accounts_list_exposes_subscription_dates_from_id_token(async_client):
+    email = "subscription@example.com"
+    raw_account_id = "acc_subscription"
+
+    response = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        raw_account_id,
+                        email,
+                        "team",
+                        subscription_active_start="2026-03-17T10:48:54+00:00",
+                        subscription_active_until="2026-04-17T10:48:54+00:00",
+                        subscription_last_checked="2026-04-03T19:13:16.315675+00:00",
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert response.status_code == 200
+
+    accounts_response = await async_client.get("/api/accounts")
+    assert accounts_response.status_code == 200
+    account = next(entry for entry in accounts_response.json()["accounts"] if entry["email"] == email)
+    assert account["auth"]["subscriptionActiveStart"] == "2026-03-17T10:48:54Z"
+    assert account["auth"]["subscriptionActiveUntil"] == "2026-04-17T10:48:54Z"
+    assert account["auth"]["subscriptionLastChecked"] == "2026-04-03T19:13:16.315675Z"
+
+
+@pytest.mark.asyncio
+async def test_import_keeps_same_login_separate_when_workspace_differs(async_client):
+    email = "same-workspace@example.com"
+    raw_account_id = "acc_same_workspace"
+
+    first = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        raw_account_id,
+                        email,
+                        "plus",
+                        workspace_id="org_alpha",
+                        workspace_name="Alpha",
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert first.status_code == 200
+
+    second = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        raw_account_id,
+                        email,
+                        "team",
+                        workspace_id="org_beta",
+                        workspace_name="Beta",
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert second.status_code == 200
+
+    first_id = generate_unique_account_id(raw_account_id, email, "org_alpha")
+    second_id = generate_unique_account_id(raw_account_id, email, "org_beta")
+    assert first.json()["accountId"] == first_id
+    assert second.json()["accountId"] == second_id
+    assert first.json()["workspaceId"] == "org_alpha"
+    assert second.json()["workspaceId"] == "org_beta"
+
+    accounts_response = await async_client.get("/api/accounts")
+    assert accounts_response.status_code == 200
+    accounts = [entry for entry in accounts_response.json()["accounts"] if entry["email"] == email]
+    assert len(accounts) == 2
+    by_id = {entry["accountId"]: entry for entry in accounts}
+    assert by_id[first_id]["workspaceName"] == "Alpha"
+    assert by_id[second_id]["workspaceName"] == "Beta"
+
+
+@pytest.mark.asyncio
+async def test_import_overwrites_same_email_and_workspace_when_chatgpt_account_matches(async_client):
+    email = "same-email-workspace@example.com"
+    raw_account_id = "acc_same_email_workspace"
+    account_id = generate_unique_account_id(raw_account_id, email, "org_alpha")
+
+    first = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        raw_account_id,
+                        email,
+                        "plus",
+                        workspace_id="org_alpha",
+                        workspace_name="Alpha",
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert first.status_code == 200
+    assert first.json()["accountId"] == account_id
+    assert first.json()["planType"] == "plus"
+
+    second = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        raw_account_id,
+                        email,
+                        "team",
+                        workspace_id="org_alpha",
+                        workspace_name="Alpha",
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert second.status_code == 200
+    assert second.json()["accountId"] == account_id
+    assert second.json()["planType"] == "team"
+
+    accounts_response = await async_client.get("/api/accounts")
+    assert accounts_response.status_code == 200
+    accounts = [entry for entry in accounts_response.json()["accounts"] if entry["email"] == email]
+    assert len(accounts) == 1
+    assert accounts[0]["accountId"] == account_id
+    assert accounts[0]["workspaceId"] == "org_alpha"
+    assert accounts[0]["workspaceName"] == "Alpha"
+    assert accounts[0]["planType"] == "team"
+
+
+@pytest.mark.asyncio
+async def test_import_updates_correct_row_when_same_email_and_workspace_have_multiple_raw_accounts(async_client):
+    email = "same-email-shared-workspace@example.com"
+
+    first_raw_account_id = "acc_workspace_first"
+    second_raw_account_id = "acc_workspace_second"
+    workspace_id = "org_shared"
+    workspace_name = "Shared"
+
+    first_id = generate_unique_account_id(first_raw_account_id, email, workspace_id)
+    second_id = generate_unique_account_id(second_raw_account_id, email, workspace_id)
+
+    first = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        first_raw_account_id,
+                        email,
+                        "plus",
+                        workspace_id=workspace_id,
+                        workspace_name=workspace_name,
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert first.status_code == 200
+    assert first.json()["accountId"] == first_id
+
+    second = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        second_raw_account_id,
+                        email,
+                        "team",
+                        workspace_id=workspace_id,
+                        workspace_name=workspace_name,
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert second.status_code == 200
+    assert second.json()["accountId"] == second_id
+
+    update_second = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        second_raw_account_id,
+                        email,
+                        "pro",
+                        workspace_id=workspace_id,
+                        workspace_name=workspace_name,
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert update_second.status_code == 200
+    assert update_second.json()["accountId"] == second_id
+    assert update_second.json()["planType"] == "pro"
+
+    accounts_response = await async_client.get("/api/accounts")
+    assert accounts_response.status_code == 200
+    accounts = [entry for entry in accounts_response.json()["accounts"] if entry["email"] == email]
+    assert len(accounts) == 2
+    by_id = {entry["accountId"]: entry for entry in accounts}
+    assert by_id[first_id]["planType"] == "plus"
+    assert by_id[second_id]["planType"] == "pro"
+
+
+@pytest.mark.asyncio
+async def test_import_updates_correct_row_when_same_email_and_workspace_have_three_raw_accounts(async_client):
+    email = "same-email-many-shared-workspace@example.com"
+    workspace_id = "org_many_shared"
+    workspace_name = "Many Shared"
+    raw_account_ids = ["acc_workspace_first", "acc_workspace_second", "acc_workspace_third"]
+    plan_types = ["plus", "team", "pro"]
+
+    for raw_account_id, plan_type in zip(raw_account_ids, plan_types, strict=True):
+        response = await async_client.post(
+            "/api/accounts/import",
+            files={
+                "auth_json": (
+                    "auth.json",
+                    json.dumps(
+                        _make_auth_json(
+                            raw_account_id,
+                            email,
+                            plan_type,
+                            workspace_id=workspace_id,
+                            workspace_name=workspace_name,
+                        )
+                    ),
+                    "application/json",
+                )
+            },
+        )
+        assert response.status_code == 200
+
+    update_third = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        raw_account_ids[2],
+                        email,
+                        "enterprise",
+                        workspace_id=workspace_id,
+                        workspace_name=workspace_name,
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert update_third.status_code == 200
+    third_id = generate_unique_account_id(raw_account_ids[2], email, workspace_id)
+    assert update_third.json()["accountId"] == third_id
+    assert update_third.json()["planType"] == "enterprise"
+
+    accounts_response = await async_client.get("/api/accounts")
+    assert accounts_response.status_code == 200
+    accounts = [entry for entry in accounts_response.json()["accounts"] if entry["email"] == email]
+    assert len(accounts) == 3
+    by_id = {entry["accountId"]: entry for entry in accounts}
+    assert by_id[generate_unique_account_id(raw_account_ids[0], email, workspace_id)]["planType"] == "plus"
+    assert by_id[generate_unique_account_id(raw_account_ids[1], email, workspace_id)]["planType"] == "team"
+    assert by_id[third_id]["planType"] == "enterprise"
+
+
+@pytest.mark.asyncio
+async def test_import_backfills_legacy_workspace_identity_before_overwrite(async_client):
+    email = "legacy-workspace@example.com"
+    raw_account_id = "acc_legacy_workspace"
+    alpha_id = generate_unique_account_id(raw_account_id, email, "org_alpha")
+    beta_id = generate_unique_account_id(raw_account_id, email, "org_beta")
+
+    first = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        raw_account_id,
+                        email,
+                        "plus",
+                        workspace_id="org_alpha",
+                        workspace_name="Alpha",
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert first.status_code == 200
+    assert first.json()["accountId"] == alpha_id
+
+    async with SessionLocal() as session:
+        await session.execute(
+            update(Account).where(Account.id == alpha_id).values(workspace_id=None, workspace_name=None)
+        )
+        await session.commit()
+
+    second = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        raw_account_id,
+                        email,
+                        "team",
+                        workspace_id="org_beta",
+                        workspace_name="Beta",
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert second.status_code == 200
+    assert second.json()["accountId"] == beta_id
+
+    accounts_response = await async_client.get("/api/accounts")
+    assert accounts_response.status_code == 200
+    accounts = [entry for entry in accounts_response.json()["accounts"] if entry["email"] == email]
+    assert len(accounts) == 2
+    by_id = {entry["accountId"]: entry for entry in accounts}
+    assert by_id[alpha_id]["workspaceId"] == "org_alpha"
+    assert by_id[alpha_id]["workspaceName"] == "Alpha"
+    assert by_id[beta_id]["workspaceId"] == "org_beta"
+    assert by_id[beta_id]["workspaceName"] == "Beta"
+
+
+@pytest.mark.asyncio
+async def test_import_keeps_same_email_and_workspace_separate_when_chatgpt_account_changes(async_client):
+    email = "same-email-same-workspace@example.com"
+
+    first = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        "acc_workspace_alpha",
+                        email,
+                        "plus",
+                        workspace_id="org_alpha",
+                        workspace_name="Alpha",
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert first.status_code == 200
+
+    second = await async_client.post(
+        "/api/accounts/import",
+        files={
+            "auth_json": (
+                "auth.json",
+                json.dumps(
+                    _make_auth_json(
+                        "acc_workspace_beta",
+                        email,
+                        "team",
+                        workspace_id="org_alpha",
+                        workspace_name="Alpha",
+                    )
+                ),
+                "application/json",
+            )
+        },
+    )
+    assert second.status_code == 200
+
+    first_id = generate_unique_account_id("acc_workspace_alpha", email, "org_alpha")
+    second_id = generate_unique_account_id("acc_workspace_beta", email, "org_alpha")
+    assert first.json()["accountId"] == first_id
+    assert second.json()["accountId"] == second_id
+
+    accounts_response = await async_client.get("/api/accounts")
+    assert accounts_response.status_code == 200
+    accounts = [entry for entry in accounts_response.json()["accounts"] if entry["email"] == email]
+    assert len(accounts) == 2
+    ids = {entry["accountId"] for entry in accounts}
+    assert ids == {first_id, second_id}
 
 
 @pytest.mark.asyncio

@@ -45,7 +45,7 @@ export function ImportDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Import auth.json</DialogTitle>
-          <DialogDescription>Upload an exported account auth.json file.</DialogDescription>
+          <DialogDescription>Upload an exported account auth.json file. Workspace metadata is detected automatically when available.</DialogDescription>
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={handleSubmit}>

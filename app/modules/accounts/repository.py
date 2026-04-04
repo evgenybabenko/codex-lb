@@ -39,7 +39,18 @@ class AccountsRepository:
         return await self._session.get(Account, account_id)
 
     async def list_accounts(self) -> list[Account]:
-        result = await self._session.execute(select(Account).order_by(Account.email))
+        result = await self._session.execute(
+            select(Account).order_by(
+                Account.email,
+                func.coalesce(Account.workspace_name, Account.workspace_id, Account.id),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def list_accounts_by_email(self, email: str) -> list[Account]:
+        result = await self._session.execute(
+            select(Account).where(Account.email == email).order_by(Account.created_at.asc(), Account.id.asc())
+        )
         return list(result.scalars().all())
 
     async def list_request_usage_summary_by_account(
@@ -123,8 +134,30 @@ class AccountsRepository:
             account.id = await self._next_available_account_id(account.id)
 
         if merge_by_email:
+            existing_by_workspace = await self._single_account_by_email_and_workspace(
+                account.email,
+                account.workspace_id,
+                chatgpt_account_id=account.chatgpt_account_id,
+                account_id=account.id,
+            )
+            if existing_by_workspace and _can_merge_account_identity(existing_by_workspace, account):
+                _apply_account_updates(existing_by_workspace, account)
+                await self._session.commit()
+                await self._session.refresh(existing_by_workspace)
+                return existing_by_workspace
+            if account.workspace_id:
+                legacy_match = await self._single_account_by_email_without_workspace(account.email)
+                if legacy_match and _can_merge_account_identity(legacy_match, account):
+                    _apply_account_updates(legacy_match, account)
+                    await self._session.commit()
+                    await self._session.refresh(legacy_match)
+                    return legacy_match
+                self._session.add(account)
+                await self._session.commit()
+                await self._session.refresh(account)
+                return account
             existing_by_email = await self._single_account_by_email(account.email)
-            if existing_by_email:
+            if existing_by_email and _can_merge_account_identity(existing_by_email, account):
                 _apply_account_updates(existing_by_email, account)
                 await self._session.commit()
                 await self._session.refresh(existing_by_email)
@@ -199,6 +232,8 @@ class AccountsRepository:
         plan_type: str | None = None,
         email: str | None = None,
         chatgpt_account_id: str | None = None,
+        workspace_id: str | None = None,
+        workspace_name: str | None = None,
     ) -> bool:
         values: dict[str, bytes | datetime | str] = {
             "access_token_encrypted": access_token_encrypted,
@@ -212,6 +247,31 @@ class AccountsRepository:
             values["email"] = email
         if chatgpt_account_id is not None:
             values["chatgpt_account_id"] = chatgpt_account_id
+        if workspace_id is not None or workspace_name is not None:
+            values["workspace_id"] = workspace_id
+            values["workspace_name"] = workspace_name
+        result = await self._session.execute(
+            update(Account).where(Account.id == account_id).values(**values).returning(Account.id)
+        )
+        await self._session.commit()
+        return result.scalar_one_or_none() is not None
+
+    async def update_identity_metadata(
+        self,
+        account_id: str,
+        *,
+        chatgpt_account_id: str | None = None,
+        workspace_id: str | None = None,
+        workspace_name: str | None = None,
+    ) -> bool:
+        values: dict[str, str | None] = {}
+        if chatgpt_account_id is not None:
+            values["chatgpt_account_id"] = chatgpt_account_id
+        if workspace_id is not None or workspace_name is not None:
+            values["workspace_id"] = workspace_id
+            values["workspace_name"] = workspace_name
+        if not values:
+            return False
         result = await self._session.execute(
             update(Account).where(Account.id == account_id).values(**values).returning(Account.id)
         )
@@ -235,6 +295,65 @@ class AccountsRepository:
     async def _single_account_by_email(self, email: str) -> Account | None:
         result = await self._session.execute(
             select(Account).where(Account.email == email).order_by(Account.created_at.asc(), Account.id.asc()).limit(2)
+        )
+        matches = list(result.scalars().all())
+        if not matches:
+            return None
+        if len(matches) > 1:
+            raise AccountIdentityConflictError(email)
+        return matches[0]
+
+    async def _single_account_by_email_and_workspace(
+        self,
+        email: str,
+        workspace_id: str | None,
+        *,
+        chatgpt_account_id: str | None = None,
+        account_id: str | None = None,
+    ) -> Account | None:
+        if not workspace_id:
+            return None
+        base_stmt = (
+            select(Account)
+            .where(Account.email == email)
+            .where(Account.workspace_id == workspace_id)
+            .order_by(Account.created_at.asc(), Account.id.asc())
+        )
+
+        if account_id:
+            result = await self._session.execute(base_stmt.where(Account.id == account_id).limit(2))
+            exact_id_matches = list(result.scalars().all())
+            if len(exact_id_matches) == 1:
+                return exact_id_matches[0]
+            if len(exact_id_matches) > 1:
+                raise AccountIdentityConflictError(email)
+
+        normalized_chatgpt_account_id = (chatgpt_account_id or "").strip()
+        if normalized_chatgpt_account_id:
+            result = await self._session.execute(
+                base_stmt.where(Account.chatgpt_account_id == normalized_chatgpt_account_id).limit(2)
+            )
+            raw_account_matches = list(result.scalars().all())
+            if len(raw_account_matches) == 1:
+                return raw_account_matches[0]
+            if len(raw_account_matches) > 1:
+                raise AccountIdentityConflictError(email)
+
+        result = await self._session.execute(base_stmt.limit(2))
+        matches = list(result.scalars().all())
+        if not matches:
+            return None
+        if len(matches) > 1:
+            return None
+        return matches[0]
+
+    async def _single_account_by_email_without_workspace(self, email: str) -> Account | None:
+        result = await self._session.execute(
+            select(Account)
+            .where(Account.email == email)
+            .where(Account.workspace_id.is_(None))
+            .order_by(Account.created_at.asc(), Account.id.asc())
+            .limit(2)
         )
         matches = list(result.scalars().all())
         if not matches:
@@ -274,6 +393,8 @@ class AccountsRepository:
 
 def _apply_account_updates(target: Account, source: Account) -> None:
     target.chatgpt_account_id = source.chatgpt_account_id
+    target.workspace_id = source.workspace_id
+    target.workspace_name = source.workspace_name
     target.email = source.email
     target.plan_type = source.plan_type
     target.access_token_encrypted = source.access_token_encrypted
@@ -282,6 +403,24 @@ def _apply_account_updates(target: Account, source: Account) -> None:
     target.last_refresh = source.last_refresh
     target.status = source.status
     target.deactivation_reason = source.deactivation_reason
+
+
+def _can_merge_account_identity(target: Account, source: Account) -> bool:
+    target_workspace_id = (target.workspace_id or "").strip() or None
+    source_workspace_id = (source.workspace_id or "").strip() or None
+    if target_workspace_id and source_workspace_id and target_workspace_id != source_workspace_id:
+        return False
+
+    target_chatgpt_account_id = (target.chatgpt_account_id or "").strip() or None
+    source_chatgpt_account_id = (source.chatgpt_account_id or "").strip() or None
+    if (
+        target_chatgpt_account_id
+        and source_chatgpt_account_id
+        and target_chatgpt_account_id != source_chatgpt_account_id
+    ):
+        return False
+
+    return True
 
 
 def _advisory_lock_key(scope: str, value: str) -> int:

@@ -52,6 +52,8 @@ class Account(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     chatgpt_account_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    workspace_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    workspace_name: Mapped[str | None] = mapped_column(String, nullable=True)
     email: Mapped[str] = mapped_column(String, nullable=False)
     plan_type: Mapped[str] = mapped_column(String, nullable=False)
 

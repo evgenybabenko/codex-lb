@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { OauthDialog } from "@/features/accounts/components/oauth-dialog";
 
@@ -55,6 +55,10 @@ const errorState = {
 };
 
 describe("OauthDialog", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("renders intro stage with method selection and starts flow", async () => {
     const user = userEvent.setup();
     const onStart = vi.fn().mockResolvedValue(undefined);
@@ -112,8 +116,31 @@ describe("OauthDialog", () => {
       />,
     );
 
-    expect(screen.getByText("Account has been added successfully.")).toBeInTheDocument();
+    expect(screen.getByText("Account added successfully. Closing this dialog...")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
+  });
+
+  it("auto closes after showing success", () => {
+    vi.useFakeTimers();
+    const onOpenChange = vi.fn();
+    const onReset = vi.fn();
+
+    render(
+      <OauthDialog
+        open
+        state={successState}
+        onOpenChange={onOpenChange}
+        onStart={vi.fn().mockResolvedValue(undefined)}
+        onComplete={vi.fn().mockResolvedValue(undefined)}
+        onManualCallback={vi.fn().mockResolvedValue(undefined)}
+        onReset={onReset}
+      />,
+    );
+
+    vi.advanceTimersByTime(1500);
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onReset).toHaveBeenCalled();
   });
 
   it("renders error stage with message and retry option", () => {

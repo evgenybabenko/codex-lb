@@ -31,6 +31,9 @@ export const AccountAuthSchema = z.object({
   access: AccountTokenStatusSchema.nullable().optional(),
   refresh: AccountTokenStatusSchema.nullable().optional(),
   idToken: AccountTokenStatusSchema.nullable().optional(),
+  subscriptionActiveStart: z.string().datetime({ offset: true }).nullable().optional(),
+  subscriptionActiveUntil: z.string().datetime({ offset: true }).nullable().optional(),
+  subscriptionLastChecked: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
 export const AccountAdditionalWindowSchema = z.object({
@@ -52,6 +55,8 @@ export const AccountSummarySchema = z.object({
   accountId: z.string(),
   email: z.string(),
   displayName: z.string(),
+  workspaceId: z.string().nullable().optional(),
+  workspaceName: z.string().nullable().optional(),
   planType: z.string(),
   status: z.string(),
   usage: AccountUsageSchema.nullable().optional(),
@@ -79,6 +84,8 @@ export const AccountImportResponseSchema = z.object({
   email: z.string(),
   planType: z.string(),
   status: z.string(),
+  workspaceId: z.string().nullable().optional(),
+  workspaceName: z.string().nullable().optional(),
 });
 
 export const AccountActionResponseSchema = z.object({

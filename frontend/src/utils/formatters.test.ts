@@ -7,6 +7,7 @@ import {
   formatCompactNumber,
   formatCountdown,
   formatCurrency,
+  formatDateTimeLabel,
   formatIdTokenLabel,
   formatModelLabel,
   formatNumber,
@@ -95,6 +96,8 @@ describe("formatters", () => {
     const formatted = formatTimeLong("2026-01-01T00:00:00.000Z");
     expect(formatted.time).not.toBe("--");
     expect(formatted.date).not.toBe("--");
+    expect(formatDateTimeLabel("2026-01-01T00:00:00.000Z")).not.toBe("--");
+    expect(formatDateTimeLabel(null)).toBe("--");
   });
 
   it("formats relative and countdown values", () => {
