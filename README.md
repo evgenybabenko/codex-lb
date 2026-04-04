@@ -328,6 +328,30 @@ uv run fastapi run app/main.py --reload        # backend :2455
 cd frontend && bun run dev                     # frontend :5173
 ```
 
+The default Compose setup uses Docker named volumes, so other developers do not
+need to edit machine-specific host paths before running the stack.
+
+Default volume names:
+
+- `codex-lb-data` for the main/runtime stack
+- `codex-lb-postgres-data` for the optional local PostgreSQL profile
+- `codex-lb-sandbox-data` for the sandbox stack in `docker-compose.sandbox.yml`
+
+If you need machine-specific bind mounts or other local-only Docker changes,
+put them in a local override file instead of editing the shared base compose:
+
+```bash
+cp docker-compose.override.example.yml docker-compose.override.yml
+```
+
+Example use cases for `docker-compose.override.yml`:
+
+- bind `/var/lib/codex-lb` to a host directory
+- add extra debugging env vars
+- change local-only ports or polling behavior
+
+The shared compose files should stay portable and repository-safe.
+
 ### OpenSpec
 
 This repo uses OpenSpec as the source of truth for change-driven work.
