@@ -24,8 +24,12 @@ This repo uses **OpenSpec as the primary workflow and SSOT** for change-driven d
 1) Find the relevant spec(s) in `openspec/specs/**` and treat them as source-of-truth.
 2) If the work changes behavior, requirements, contracts, or schema: create an OpenSpec change in `openspec/changes/**` first (proposal -> tasks).
 3) Implement the tasks; keep code + specs in sync (update `spec.md` as needed).
-4) Validate specs locally: `openspec validate --specs`
+4) Validate specs locally: `npx -y @fission-ai/openspec validate --specs`
 5) When done: verify + archive the change (do not archive unverified changes).
+
+OpenSpec CLI note:
+- This repo does not assume a globally installed `openspec` binary.
+- Use `npx -y @fission-ai/openspec ...` for reproducible local runs.
 
 ### Source of Truth
 

@@ -328,6 +328,18 @@ uv run fastapi run app/main.py --reload        # backend :2455
 cd frontend && bun run dev                     # frontend :5173
 ```
 
+### OpenSpec
+
+This repo uses OpenSpec as the source of truth for change-driven work.
+
+Run spec validation locally with:
+
+```bash
+npx -y @fission-ai/openspec validate --specs
+```
+
+The project does not require a globally installed `openspec` binary. The `npx` form downloads and runs the correct CLI on demand.
+
 ## Contributors ✨
 
 Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):

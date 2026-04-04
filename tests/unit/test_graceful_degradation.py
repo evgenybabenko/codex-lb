@@ -125,7 +125,18 @@ async def test_health_ready_succeeds_when_degraded() -> None:
 
     set_degraded("all upstream accounts are unavailable")
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock()
+
+    class _ExecuteResult:
+        def scalars(self):
+            return self
+
+        def all(self) -> list[str]:
+            return []
+
+    async def _execute(*args, **kwargs):
+        return _ExecuteResult()
+
+    mock_session.execute = AsyncMock(side_effect=_execute)
 
     with patch("app.core.draining._draining", False), patch("app.modules.health.api.get_session") as mock_get_session:
 
