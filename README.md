@@ -61,7 +61,7 @@ Open [localhost:2455](http://localhost:2455) → Add account → Done.
 
 Choose one runtime:
 
-- Docker if you want the fastest setup with persistent named volumes and no local Python or Node toolchain.
+- Docker if you want the fastest setup with a local bind-mounted data directory and no local Python or Node toolchain.
 - `uvx codex-lb` if you want a lightweight local single-binary style run.
 - Full local development mode if you plan to modify backend or frontend code.
 
@@ -353,6 +353,9 @@ Typical development flow:
 
 ```bash
 # Docker
+cp .env.example .env.local
+# edit CODEX_LB_HOST_DATA_DIR and CODEX_LB_SANDBOX_HOST_DATA_DIR
+mkdir -p ./.local/codex-lb-data ./.local/codex-lb-sandbox-data
 docker compose watch
 
 # Local
@@ -367,29 +370,24 @@ Local toolchain expectations:
 - Node.js plus `bun` for the frontend workspace
 - Docker Desktop or Docker Engine if you want the containerized flow
 
-The default Compose setup uses Docker named volumes, so other developers do not
-need to edit machine-specific host paths before running the stack.
+The shared Compose files now use bind mounts driven by `.env.local`.
+Before running Docker, set these paths to local directories on your machine:
 
-Default volume names:
+- `CODEX_LB_HOST_DATA_DIR` for the main/runtime stack
+- `CODEX_LB_SANDBOX_HOST_DATA_DIR` for the sandbox stack
 
-- `codex-lb-data` for the main/runtime stack
-- `codex-lb-postgres-data` for the optional local PostgreSQL profile
-- `codex-lb-sandbox-data` for the sandbox stack in `docker-compose.sandbox.yml`
+Example:
 
-If you need machine-specific bind mounts or other local-only Docker changes,
-put them in a local override file instead of editing the shared base compose:
-
-```bash
-cp docker-compose.override.example.yml docker-compose.override.yml
+```env
+CODEX_LB_HOST_DATA_DIR=./.local/codex-lb-data
+CODEX_LB_SANDBOX_HOST_DATA_DIR=./.local/codex-lb-sandbox-data
 ```
 
-Example use cases for `docker-compose.override.yml`:
+This keeps developer-specific paths in local environment config instead of
+hardcoding them in tracked Compose files.
 
-- bind `/var/lib/codex-lb` to a host directory
-- add extra debugging env vars
-- change local-only ports or polling behavior
-
-The shared compose files should stay portable and repository-safe.
+The optional local PostgreSQL profile still uses the Docker volume
+`codex-lb-postgres-data`.
 
 ### Validation
 
