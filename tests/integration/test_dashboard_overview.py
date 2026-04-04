@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 from datetime import timedelta
 
 import pytest
@@ -15,7 +17,19 @@ from app.modules.usage.repository import UsageRepository
 pytestmark = pytest.mark.integration
 
 
-def _make_account(account_id: str, email: str, plan_type: str = "plus") -> Account:
+def _encode_jwt(payload: dict) -> str:
+    raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    body = base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+    return f"header.{body}.sig"
+
+
+def _make_account(
+    account_id: str,
+    email: str,
+    plan_type: str = "plus",
+    *,
+    id_token: str = "id",
+) -> Account:
     encryptor = TokenEncryptor()
     return Account(
         id=account_id,
@@ -23,7 +37,7 @@ def _make_account(account_id: str, email: str, plan_type: str = "plus") -> Accou
         plan_type=plan_type,
         access_token_encrypted=encryptor.encrypt("access"),
         refresh_token_encrypted=encryptor.encrypt("refresh"),
-        id_token_encrypted=encryptor.encrypt("id"),
+        id_token_encrypted=encryptor.encrypt(id_token),
         last_refresh=utcnow(),
         status=AccountStatus.ACTIVE,
         deactivation_reason=None,
@@ -170,6 +184,43 @@ async def test_dashboard_overview_computes_depletion_from_recent_db_history(asyn
     assert payload["depletionPrimary"] is not None
     assert 0.0 <= payload["depletionPrimary"]["risk"] <= 1.0
     assert payload["depletionPrimary"]["riskLevel"] in {"safe", "warning", "danger", "critical"}
+
+
+@pytest.mark.asyncio
+async def test_dashboard_overview_includes_subscription_until(async_client, db_setup):
+    subscription_until = "2026-04-17T10:48:54+00:00"
+    token = _encode_jwt(
+        {
+            "email": "subscribed@example.com",
+            "chatgpt_account_id": "acc_subscription",
+            "https://api.openai.com/auth.chatgpt_subscription_active_until": subscription_until,
+        }
+    )
+
+    async with SessionLocal() as session:
+        accounts_repo = AccountsRepository(session)
+        usage_repo = UsageRepository(session)
+
+        await accounts_repo.upsert(
+            _make_account(
+                "acc_subscription",
+                "subscribed@example.com",
+                id_token=token,
+            )
+        )
+        await usage_repo.add_entry(
+            "acc_subscription",
+            20.0,
+            window="primary",
+            recorded_at=utcnow() - timedelta(minutes=2),
+        )
+
+    response = await async_client.get("/api/dashboard/overview")
+    assert response.status_code == 200
+
+    payload = response.json()
+    account = next(item for item in payload["accounts"] if item["accountId"] == "acc_subscription")
+    assert account["auth"]["subscriptionActiveUntil"] == "2026-04-17T10:48:54Z"
 
 
 @pytest.mark.asyncio
