@@ -15,11 +15,11 @@ describe("AccountListItem", () => {
 
     render(<AccountListItem account={account} selected={false} onSelect={vi.fn()} />);
 
-    expect(screen.getByTestId("mini-quota-track")).toHaveClass("bg-muted");
-    expect(screen.queryByTestId("mini-quota-fill")).not.toBeInTheDocument();
+    expect(screen.getByTestId("mini-quota-secondary-track")).toHaveClass("bg-muted");
+    expect(screen.queryByTestId("mini-quota-secondary-fill")).not.toBeInTheDocument();
   });
 
-  it("renders quota fill when secondary remaining percent is available", () => {
+  it("renders both 5h and 7d quota fills when remaining percents are available", () => {
     const account = createAccountSummary({
       usage: {
         primaryRemainingPercent: 82,
@@ -29,6 +29,7 @@ describe("AccountListItem", () => {
 
     render(<AccountListItem account={account} selected={false} onSelect={vi.fn()} />);
 
-    expect(screen.getByTestId("mini-quota-fill")).toHaveStyle({ width: "73%" });
+    expect(screen.getByTestId("mini-quota-primary-fill")).toHaveStyle({ width: "82%" });
+    expect(screen.getByTestId("mini-quota-secondary-fill")).toHaveStyle({ width: "73%" });
   });
 });

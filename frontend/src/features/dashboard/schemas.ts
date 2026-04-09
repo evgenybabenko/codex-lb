@@ -99,6 +99,7 @@ export const RequestLogSchema = z.object({
   reasoningEffort: z.string().nullable(),
   costUsd: z.number().nullable(),
   latencyMs: z.number().nullable(),
+  latencyFirstTokenMs: z.number().nullable().optional().default(null),
 });
 
 export const RequestLogsResponseSchema = z.object({

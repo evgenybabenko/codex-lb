@@ -10,6 +10,7 @@ import { ApiKeyCreatedDialog } from "@/features/api-keys/components/api-key-crea
 import { ApiKeyTable } from "@/features/api-keys/components/api-key-table";
 import { useApiKeys } from "@/features/api-keys/hooks/use-api-keys";
 import type { ApiKey, ApiKeyCreateRequest, ApiKeyUpdateRequest } from "@/features/api-keys/schemas";
+import { useT } from "@/lib/i18n";
 import { getErrorMessageOrNull } from "@/utils/errors";
 
 const ApiKeyCreateDialog = lazy(() =>
@@ -30,6 +31,7 @@ export function ApiKeysSection({
   disabled = false,
   onApiKeyAuthEnabledChange,
 }: ApiKeysSectionProps) {
+  const t = useT();
   const {
     apiKeysQuery,
     createMutation,
@@ -81,12 +83,12 @@ export function ApiKeysSection({
             <KeySquare className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold">API Keys</h3>
-            <p className="text-xs text-muted-foreground">Create and manage API keys for clients.</p>
+            <h3 className="text-sm font-semibold">{t("apiKeysSectionTitle")}</h3>
+            <p className="text-xs text-muted-foreground">{t("apiKeysSectionDescription")}</p>
           </div>
         </div>
         <Button type="button" size="sm" className="h-8 text-xs" onClick={() => createDialog.show()} disabled={busy}>
-          Create key
+          {t("apiKeysSectionCreate")}
         </Button>
       </div>
 
@@ -133,9 +135,9 @@ export function ApiKeysSection({
 
       <ConfirmDialog
         open={deleteDialog.open}
-        title="Delete API key"
-        description="This key will stop working immediately."
-        confirmLabel="Delete"
+        title={t("apiKeysDeleteTitle")}
+        description={t("apiKeysDeleteDescription")}
+        confirmLabel={t("commonDelete")}
         onOpenChange={deleteDialog.onOpenChange}
         onConfirm={() => {
           if (!deleteDialog.data) {

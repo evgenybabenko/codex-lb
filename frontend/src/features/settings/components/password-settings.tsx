@@ -23,6 +23,7 @@ import {
   PasswordRemoveRequestSchema,
   PasswordSetupRequestSchema,
 } from "@/features/auth/schemas";
+import { useT } from "@/lib/i18n";
 import { getErrorMessage } from "@/utils/errors";
 
 type PasswordDialog = "setup" | "change" | "remove" | null;
@@ -32,7 +33,9 @@ export type PasswordSettingsProps = {
 };
 
 export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
+  const t = useT();
   const passwordRequired = useAuthStore((s) => s.passwordRequired);
+  const bootstrapTokenRequired = useAuthStore((s) => s.bootstrapTokenRequired);
   const refreshSession = useAuthStore((s) => s.refreshSession);
 
   const [activeDialog, setActiveDialog] = useState<PasswordDialog>(null);
@@ -40,7 +43,7 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
 
   const setupForm = useForm({
     resolver: zodResolver(PasswordSetupRequestSchema),
-    defaultValues: { password: "" },
+    defaultValues: { password: "", bootstrapToken: "" },
   });
 
   const changeForm = useForm({
@@ -67,12 +70,21 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
     removeForm.reset();
   };
 
-  const handleSetup = async (values: { password: string }) => {
+  const handleSetup = async (values: { password: string; bootstrapToken?: string }) => {
     setError(null);
+    if (bootstrapTokenRequired && !values.bootstrapToken?.trim()) {
+      setupForm.setError("bootstrapToken", {
+        message: t("passwordBootstrapTokenMissing"),
+      });
+      return;
+    }
     try {
-      await setupPassword(values);
+      await setupPassword({
+        password: values.password,
+        bootstrapToken: values.bootstrapToken?.trim() || undefined,
+      });
       await refreshSession();
-      toast.success("Password configured");
+      toast.success(t("passwordConfiguredToast"));
       closeDialog();
     } catch (caught) {
       setError(getErrorMessage(caught));
@@ -83,7 +95,7 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
     setError(null);
     try {
       await changePassword(values);
-      toast.success("Password changed");
+      toast.success(t("passwordChangedToast"));
       closeDialog();
     } catch (caught) {
       setError(getErrorMessage(caught));
@@ -95,7 +107,7 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
     try {
       await removePassword(values);
       await refreshSession();
-      toast.success("Password removed");
+      toast.success(t("passwordRemovedToast"));
       closeDialog();
     } catch (caught) {
       setError(getErrorMessage(caught));
@@ -111,9 +123,9 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
             <KeyRound className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold">Password</h3>
+            <h3 className="text-sm font-semibold">{t("passwordSettingsTitle")}</h3>
             <p className="text-xs text-muted-foreground">
-              {passwordRequired ? "Password is configured." : "No password set."}
+              {passwordRequired ? t("passwordSettingsConfigured") : t("passwordSettingsMissing")}
             </p>
           </div>
         </div>
@@ -129,7 +141,7 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
                 disabled={lock}
                 onClick={() => setActiveDialog("change")}
               >
-                Change
+                {t("passwordChange")}
               </Button>
               <Button
                 type="button"
@@ -139,7 +151,7 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
                 disabled={lock}
                 onClick={() => setActiveDialog("remove")}
               >
-                Remove
+                {t("passwordRemove")}
               </Button>
             </>
           ) : (
@@ -150,7 +162,7 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
               disabled={lock}
               onClick={() => setActiveDialog("setup")}
             >
-              Set password
+              {t("passwordSet")}
             </Button>
           )}
         </div>
@@ -161,8 +173,8 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
       <Dialog open={activeDialog === "setup"} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Set password</DialogTitle>
-            <DialogDescription>Set a password for dashboard login.</DialogDescription>
+            <DialogTitle>{t("passwordSetDialogTitle")}</DialogTitle>
+            <DialogDescription>{t("passwordSetDialogDescription")}</DialogDescription>
           </DialogHeader>
           {error ? <AlertMessage variant="error">{error}</AlertMessage> : null}
           <Form {...setupForm}>
@@ -172,20 +184,43 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>{t("authPasswordLabel")}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" autoComplete="new-password" placeholder="Min. 8 characters" />
+                      <Input {...field} type="password" autoComplete="new-password" placeholder={t("passwordMinPlaceholder")} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              {bootstrapTokenRequired ? (
+                <FormField
+                  control={setupForm.control}
+                  name="bootstrapToken"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("passwordBootstrapTokenLabel")}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="password"
+                          autoComplete="off"
+                          placeholder={t("passwordBootstrapTokenPlaceholder")}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        {t("passwordBootstrapTokenDescription")}
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={closeDialog} disabled={busy}>
-                  Cancel
+                  {t("commonCancel")}
                 </Button>
                 <Button type="submit" disabled={lock}>
-                  Set password
+                  {t("passwordSet")}
                 </Button>
               </DialogFooter>
             </form>
@@ -197,8 +232,8 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
       <Dialog open={activeDialog === "change"} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Change password</DialogTitle>
-            <DialogDescription>Enter your current password and a new one.</DialogDescription>
+            <DialogTitle>{t("passwordChangeDialogTitle")}</DialogTitle>
+            <DialogDescription>{t("passwordChangeDialogDescription")}</DialogDescription>
           </DialogHeader>
           {error ? <AlertMessage variant="error">{error}</AlertMessage> : null}
           <Form {...changeForm}>
@@ -208,7 +243,7 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
                 name="currentPassword"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Current password</FormLabel>
+                    <FormLabel>{t("passwordCurrent")}</FormLabel>
                     <FormControl>
                       <Input {...field} type="password" autoComplete="current-password" />
                     </FormControl>
@@ -221,9 +256,9 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
                 name="newPassword"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>New password</FormLabel>
+                    <FormLabel>{t("passwordNew")}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" autoComplete="new-password" placeholder="Min. 8 characters" />
+                      <Input {...field} type="password" autoComplete="new-password" placeholder={t("passwordMinPlaceholder")} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -231,10 +266,10 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
               />
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={closeDialog} disabled={busy}>
-                  Cancel
+                  {t("commonCancel")}
                 </Button>
                 <Button type="submit" disabled={lock}>
-                  Change password
+                  {t("passwordChangeDialogTitle")}
                 </Button>
               </DialogFooter>
             </form>
@@ -246,8 +281,8 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
       <Dialog open={activeDialog === "remove"} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Remove password</DialogTitle>
-            <DialogDescription>Confirm your current password to remove it.</DialogDescription>
+            <DialogTitle>{t("passwordRemoveDialogTitle")}</DialogTitle>
+            <DialogDescription>{t("passwordRemoveDialogDescription")}</DialogDescription>
           </DialogHeader>
           {error ? <AlertMessage variant="error">{error}</AlertMessage> : null}
           <Form {...removeForm}>
@@ -257,9 +292,9 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Current password</FormLabel>
+                    <FormLabel>{t("passwordCurrent")}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" autoComplete="current-password" placeholder="Enter current password" />
+                      <Input {...field} type="password" autoComplete="current-password" placeholder={t("passwordCurrentPlaceholder")} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -267,10 +302,10 @@ export function PasswordSettings({ disabled = false }: PasswordSettingsProps) {
               />
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={closeDialog} disabled={busy}>
-                  Cancel
+                  {t("commonCancel")}
                 </Button>
                 <Button type="submit" variant="destructive" disabled={lock}>
-                  Remove password
+                  {t("passwordRemoveDialogTitle")}
                 </Button>
               </DialogFooter>
             </form>

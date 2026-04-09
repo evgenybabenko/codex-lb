@@ -1,5 +1,5 @@
-import { act, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AccountCard } from "@/features/dashboard/components/account-card";
 import { usePrivacyStore } from "@/hooks/use-privacy";
@@ -12,7 +12,16 @@ afterEach(() => {
 });
 
 describe("AccountCard", () => {
-  it("renders both 5h and weekly quota bars for regular accounts", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("renders both 5H and 7D quota bars for regular accounts", () => {
     const account = createAccountSummary({
       workspaceName: "Ve3ultra",
       auth: {
@@ -25,13 +34,14 @@ describe("AccountCard", () => {
     render(<AccountCard account={account} />);
 
     expect(screen.getByText("Workspace | Ve3ultra | until 2026-04-17")).toBeInTheDocument();
-    expect(screen.getByText("5h")).toBeInTheDocument();
-    expect(screen.getByText("7d")).toBeInTheDocument();
+    expect(screen.getByText("5H")).toBeInTheDocument();
+    expect(screen.getByText("7D")).toBeInTheDocument();
     expect(screen.getByText("82%")).toBeInTheDocument();
     expect(screen.getByText("67%")).toBeInTheDocument();
+    expect(screen.getAllByText(/13h|1d 12h/).length).toBeGreaterThan(0);
   });
 
-  it("hides 5h quota bar for weekly-only accounts", () => {
+  it("hides 5H quota bar for weekly-only accounts", () => {
     const account = createAccountSummary({
       planType: "free",
       workspaceId: "personal-free",
@@ -46,8 +56,8 @@ describe("AccountCard", () => {
     render(<AccountCard account={account} />);
 
     expect(screen.getByText("Personal | Free")).toBeInTheDocument();
-    expect(screen.queryByText("5h")).not.toBeInTheDocument();
-    expect(screen.getByText("7d")).toBeInTheDocument();
+    expect(screen.queryByText("5H")).not.toBeInTheDocument();
+    expect(screen.getByText("7D")).toBeInTheDocument();
   });
 
   it("omits subscription suffix when subscription date is missing", () => {
@@ -71,5 +81,16 @@ describe("AccountCard", () => {
 
     expect(screen.getByText("aws-account@example.com")).toBeInTheDocument();
     expect(container.querySelector(".privacy-blur")).not.toBeNull();
+  });
+
+  it("navigates through the whole card click instead of a separate link icon", async () => {
+    const onAction = vi.fn();
+    const account = createAccountSummary();
+
+    render(<AccountCard account={account} onAction={onAction} />);
+
+    fireEvent.click(screen.getByRole("button"));
+
+    expect(onAction).toHaveBeenCalledWith(account, "details");
   });
 });

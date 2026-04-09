@@ -1,11 +1,16 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
 
 import { AlertMessage } from "@/components/alert-message";
 import { useAccountMutations } from "@/features/accounts/hooks/use-accounts";
 import { AccountCards } from "@/features/dashboard/components/account-cards";
+import {
+  AccountSortControls,
+} from "@/features/dashboard/components/account-sort-controls";
+import {
+  sortDashboardAccounts,
+  type DashboardSortState,
+} from "@/features/dashboard/components/account-sort";
 import { DashboardSkeleton } from "@/features/dashboard/components/dashboard-skeleton";
 import { RequestFilters } from "@/features/dashboard/components/filters/request-filters";
 import { RecentRequestsTable } from "@/features/dashboard/components/recent-requests-table";
@@ -16,24 +21,19 @@ import { useRequestLogs } from "@/features/dashboard/hooks/use-request-logs";
 import { buildDashboardView } from "@/features/dashboard/utils";
 import type { AccountSummary } from "@/features/dashboard/schemas";
 import { useThemeStore } from "@/hooks/use-theme";
-import { REQUEST_STATUS_LABELS } from "@/utils/constants";
+import { useT } from "@/lib/i18n";
 import { formatModelLabel, formatSlug } from "@/utils/formatters";
 
 const MODEL_OPTION_DELIMITER = ":::";
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const t = useT();
   const isDark = useThemeStore((s) => s.theme === "dark");
+  const [accountSort, setAccountSort] = useState<DashboardSortState>({ field: "email", direction: "asc" });
   const dashboardQuery = useDashboard();
   const { filters, logsQuery, optionsQuery, updateFilters } = useRequestLogs();
   const { resumeMutation } = useAccountMutations();
-
-  const isRefreshing = dashboardQuery.isFetching || logsQuery.isFetching;
-
-  const handleRefresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-  }, [queryClient]);
 
   const handleAccountAction = useCallback(
     (account: AccountSummary, action: string) => {
@@ -92,9 +92,15 @@ export function DashboardPage() {
     () =>
       (optionsQuery.data?.statuses ?? []).map((status) => ({
         value: status,
-        label: REQUEST_STATUS_LABELS[status] ?? formatSlug(status),
+        label:
+          ({
+            ok: t("requestStatusOk"),
+            rate_limit: t("requestStatusRateLimit"),
+            quota: t("requestStatusQuota"),
+            error: t("requestStatusError"),
+          }[status] ?? formatSlug(status)),
       })),
-    [optionsQuery.data?.statuses],
+    [optionsQuery.data?.statuses, t],
   );
 
   const errorMessage =
@@ -102,28 +108,13 @@ export function DashboardPage() {
     (logsQuery.error instanceof Error && logsQuery.error.message) ||
     (optionsQuery.error instanceof Error && optionsQuery.error.message) ||
     null;
+  const sortedAccounts = useMemo(
+    () => sortDashboardAccounts(overview?.accounts ?? [], accountSort),
+    [overview?.accounts, accountSort],
+  );
 
   return (
     <div className="animate-fade-in-up space-y-8">
-      {/* Page header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Overview, account health, and recent request logs.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
-          title="Refresh dashboard"
-        >
-          <RefreshCw className={`h-4 w-4${isRefreshing ? " animate-spin" : ""}`} />
-        </button>
-      </div>
-
       {errorMessage ? <AlertMessage variant="error">{errorMessage}</AlertMessage> : null}
 
       {!view ? (
@@ -133,6 +124,7 @@ export function DashboardPage() {
           <StatsGrid stats={view.stats} />
 
             <UsageDonuts
+              accounts={overview?.accounts ?? []}
               primaryItems={view.primaryUsageItems}
               secondaryItems={view.secondaryUsageItems}
               primaryTotal={overview?.summary.primaryWindow.capacityCredits ?? 0}
@@ -142,16 +134,25 @@ export function DashboardPage() {
             />
 
           <section className="space-y-4">
-            <div className="flex items-center gap-3">
-              <h2 className="text-[13px] font-medium uppercase tracking-wider text-muted-foreground">Accounts</h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-[13px] font-medium uppercase tracking-wider text-muted-foreground">{t("dashboardAccounts")}</h2>
               <div className="h-px flex-1 bg-border" />
+              <AccountSortControls
+                sort={accountSort}
+                onChange={setAccountSort}
+                options={["email", "workspace", "primary_remaining", "primary_reset", "secondary_remaining", "secondary_reset"]}
+                appearance="bare"
+                badgePlacement="end"
+                className="gap-3"
+                buttonClassName="h-8 w-[2.25rem] px-0"
+              />
             </div>
-            <AccountCards accounts={overview?.accounts ?? []} onAction={handleAccountAction} />
+            <AccountCards accounts={sortedAccounts} onAction={handleAccountAction} />
           </section>
 
           <section className="space-y-4">
             <div className="flex items-center gap-3">
-              <h2 className="text-[13px] font-medium uppercase tracking-wider text-muted-foreground">Request Logs</h2>
+              <h2 className="text-[13px] font-medium uppercase tracking-wider text-muted-foreground">{t("dashboardRequestLogs")}</h2>
               <div className="h-px flex-1 bg-border" />
             </div>
             <RequestFilters

@@ -6,8 +6,10 @@ import { SpinnerBlock } from "@/components/ui/spinner";
 import { LoginForm } from "@/features/auth/components/login-form";
 import { TotpDialog } from "@/features/auth/components/totp-dialog";
 import { useAuthStore } from "@/features/auth/hooks/use-auth";
+import { useT } from "@/lib/i18n";
 
 export function AuthGate({ children }: PropsWithChildren) {
+  const t = useT();
   const refreshSessionStable = useAuthStore((state) => state.refreshSession);
   const initialized = useAuthStore((state) => state.initialized);
   const loading = useAuthStore((state) => state.loading);
@@ -48,7 +50,7 @@ export function AuthGate({ children }: PropsWithChildren) {
             </div>
             <div>
               <h1 className="text-xl font-semibold tracking-tight">Codex LB</h1>
-              <p className="mt-0.5 text-sm text-muted-foreground">API Load Balancer</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">{t("authSubtitle")}</p>
             </div>
           </div>
           <LoginForm />

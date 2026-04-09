@@ -5,6 +5,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useT } from "@/lib/i18n";
 
 const TIMEFRAME_VALUES = ["all", "1h", "24h", "7d"] as const;
 export type TimeframeValue = (typeof TIMEFRAME_VALUES)[number];
@@ -19,13 +20,14 @@ export type TimeframeSelectProps = {
 };
 
 export function TimeframeSelect({ value, onChange }: TimeframeSelectProps) {
+  const t = useT();
   return (
     <Select value={value} onValueChange={(next) => { if (isTimeframeValue(next)) onChange(next); }}>
       <SelectTrigger size="sm" className="w-28">
-        <SelectValue placeholder="Timeframe" />
+        <SelectValue placeholder={t("commonTimeframe")} />
       </SelectTrigger>
       <SelectContent align="start">
-        <SelectItem value="all">All</SelectItem>
+        <SelectItem value="all">{t("dashboardTimeframeAll")}</SelectItem>
         <SelectItem value="1h">1h</SelectItem>
         <SelectItem value="24h">24h</SelectItem>
         <SelectItem value="7d">7d</SelectItem>

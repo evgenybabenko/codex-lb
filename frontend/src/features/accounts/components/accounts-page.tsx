@@ -11,6 +11,7 @@ import { AccountsSkeleton } from "@/features/accounts/components/accounts-skelet
 import { ImportDialog } from "@/features/accounts/components/import-dialog";
 import { useAccounts } from "@/features/accounts/hooks/use-accounts";
 import { useOauth } from "@/features/accounts/hooks/use-oauth";
+import { useT } from "@/lib/i18n";
 import { buildDuplicateAccountIdSet } from "@/utils/account-identifiers";
 import { getErrorMessageOrNull } from "@/utils/errors";
 
@@ -19,6 +20,7 @@ const OauthDialog = lazy(() =>
 );
 
 export function AccountsPage() {
+  const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
   const {
     accountsQuery,
@@ -75,14 +77,6 @@ export function AccountsPage() {
 
   return (
     <div className="animate-fade-in-up space-y-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Accounts</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage imported accounts and authentication flows.
-        </p>
-      </div>
-
       {mutationError ? <AlertMessage variant="error">{mutationError}</AlertMessage> : null}
 
       {!accountsQuery.data ? (
@@ -142,10 +136,10 @@ export function AccountsPage() {
 
       <ConfirmDialog
         open={deleteDialog.open}
-        title="Delete account"
-        description="This action removes the account from the load balancer configuration."
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
+        title={t("accountsDeleteTitle")}
+        description={t("accountsDeleteDescription")}
+        confirmLabel={t("commonDelete")}
+        cancelLabel={t("commonCancel")}
         onOpenChange={deleteDialog.onOpenChange}
         onConfirm={() => {
           if (!deleteDialog.data) {
@@ -157,7 +151,7 @@ export function AccountsPage() {
         }}
       />
 
-      <LoadingOverlay visible={!!accountsQuery.data && mutationBusy} label="Updating accounts..." />
+      <LoadingOverlay visible={!!accountsQuery.data && mutationBusy} label={t("accountsUpdating")} />
     </div>
   );
 }

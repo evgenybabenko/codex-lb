@@ -157,19 +157,19 @@ describe("AccountList", () => {
       },
     ];
 
-    expect(sortAccounts(accounts, "email_asc").map((account) => account.email)).toEqual([
+    expect(sortAccounts(accounts, { field: "email", direction: "asc" }).map((account) => account.email)).toEqual([
       "alpha@example.com",
       "bravo@example.com",
       "charlie@example.com",
     ]);
 
-    expect(sortAccounts(accounts, "workspace_asc").map((account) => account.email)).toEqual([
+    expect(sortAccounts(accounts, { field: "workspace", direction: "asc" }).map((account) => account.email)).toEqual([
       "alpha@example.com",
       "bravo@example.com",
       "charlie@example.com",
     ]);
 
-    expect(sortAccounts(accounts, "remaining_asc").map((account) => account.email)).toEqual([
+    expect(sortAccounts(accounts, { field: "secondary_remaining", direction: "asc" }).map((account) => account.email)).toEqual([
       "bravo@example.com",
       "charlie@example.com",
       "alpha@example.com",

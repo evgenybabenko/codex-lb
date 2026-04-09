@@ -1,17 +1,16 @@
-import { Clock, ExternalLink, Play, RotateCcw } from "lucide-react";
-
 import { usePrivacyStore } from "@/hooks/use-privacy";
-import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { AccountSummary } from "@/features/dashboard/schemas";
+import { ResetProgressBadge, useResetRatio } from "@/features/dashboard/components/reset-progress-badge";
 import { formatWorkspaceLabel, formatWorkspaceTitle } from "@/utils/account-identifiers";
 import {
   normalizeStatus,
 } from "@/utils/account-status";
 import { formatPercentNullable, formatQuotaResetLabel, formatSlug } from "@/utils/formatters";
 
-type AccountAction = "details" | "resume" | "reauth";
+type AccountAction = "details";
 
 export type AccountCardProps = {
   account: AccountSummary;
@@ -20,7 +19,13 @@ export type AccountCardProps = {
 };
 
 function formatCardResetLabel(label: string): string {
-  return label.startsWith("in ") ? label.slice(3) : label;
+  if (label.startsWith("in ")) {
+    return label.slice(3);
+  }
+  if (label.startsWith("через ")) {
+    return label.slice(6);
+  }
+  return label;
 }
 
 function formatSubscriptionUntilLabel(value: string | null | undefined): string | null {
@@ -37,12 +42,16 @@ function formatSubscriptionUntilLabel(value: string | null | undefined): string 
 function QuotaBar({
   label,
   percent,
+  resetAt,
+  windowMinutes,
   resetLabel,
   accent,
   metaPosition,
 }: {
   label: string;
   percent: number | null;
+  resetAt: string | null | undefined;
+  windowMinutes: number | null | undefined;
   resetLabel: string;
   accent: "blue" | "green";
   metaPosition: "top" | "bottom";
@@ -50,6 +59,7 @@ function QuotaBar({
   const clamped = percent === null ? 0 : Math.max(0, Math.min(100, percent));
   const hasPercent = percent !== null;
   const isTopMeta = metaPosition === "top";
+  const resetRatio = useResetRatio(resetAt, windowMinutes);
   const accentClasses =
     accent === "blue"
       ? {
@@ -66,7 +76,7 @@ function QuotaBar({
   const metaRow = (
     <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
       <div className="flex min-w-0 items-center gap-1">
-        <Clock className="h-3 w-3 shrink-0" />
+        <ResetProgressBadge ratio={resetRatio} accent={accent} />
         <span className="truncate">{formatCardResetLabel(resetLabel)}</span>
       </div>
       <span
@@ -99,18 +109,19 @@ function QuotaBar({
   );
 }
 
-function formatAccountContextLabel(account: AccountSummary): string | null {
+function formatAccountContextLabel(account: AccountSummary, t: ReturnType<typeof useT>): string | null {
   const workspaceLabel = formatWorkspaceLabel(account);
-  if (workspaceLabel && workspaceLabel !== "Workspace") {
-    return `Workspace | ${workspaceLabel}`;
+  if (workspaceLabel && workspaceLabel !== t("commonWorkspace")) {
+    return t("accountCardContextWorkspace", { value: workspaceLabel });
   }
   if (account.planType.trim().toLowerCase() === "free") {
-    return "Personal | Free";
+    return t("accountCardContextPersonalFree");
   }
   return workspaceLabel;
 }
 
 export function AccountCard({ account, showAccountId = false, onAction }: AccountCardProps) {
+  const t = useT();
   const blurred = usePrivacyStore((s) => s.blurred);
   const status = normalizeStatus(account.status);
   const primaryRemaining = account.usage?.primaryRemainingPercent ?? null;
@@ -121,18 +132,22 @@ export function AccountCard({ account, showAccountId = false, onAction }: Accoun
   const secondaryReset = formatQuotaResetLabel(account.resetAtSecondary ?? null);
 
   const title = account.email;
-  const workspaceLabel = formatAccountContextLabel(account);
+  const workspaceLabel = formatAccountContextLabel(account, t);
   const workspaceTitle = formatWorkspaceTitle(account);
   const subscriptionUntil = formatSubscriptionUntilLabel(account.auth?.subscriptionActiveUntil);
   const subtitle = [
     workspaceLabel ?? formatSlug(account.planType),
-    subscriptionUntil ? `until ${subscriptionUntil}` : null,
+    subscriptionUntil ? t("commonUntil", { value: subscriptionUntil }) : null,
   ]
     .filter(Boolean)
     .join(" | ");
 
   return (
-    <div className="card-hover rounded-xl border bg-card p-4">
+    <button
+      type="button"
+      className="card-hover w-full rounded-xl border bg-card p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      onClick={() => onAction?.(account, "details")}
+    >
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -143,7 +158,10 @@ export function AccountCard({ account, showAccountId = false, onAction }: Accoun
           </p>
           <p
             className="mt-0.5 truncate text-xs text-muted-foreground"
-            title={[workspaceTitle, showAccountId ? `Account ID ${account.accountId}` : null].filter(Boolean).join(" | ") || undefined}
+            title={[
+              workspaceTitle,
+              showAccountId ? t("accountTooltipId", { id: account.accountId }) : null,
+            ].filter(Boolean).join(" | ") || undefined}
           >
             {subtitle}
           </p>
@@ -155,59 +173,25 @@ export function AccountCard({ account, showAccountId = false, onAction }: Accoun
       <div className="mt-3.5 space-y-0">
         {!weeklyOnly && (
           <QuotaBar
-            label="5h"
+            label={t("dashboardUsagePrimaryTitle")}
             percent={primaryRemaining}
+            resetAt={account.resetAtPrimary}
+            windowMinutes={account.windowMinutesPrimary}
             resetLabel={primaryReset}
             accent="blue"
             metaPosition="top"
           />
         )}
         <QuotaBar
-          label="7d"
+          label={t("dashboardUsageSecondaryTitle")}
           percent={secondaryRemaining}
+          resetAt={account.resetAtSecondary}
+          windowMinutes={account.windowMinutesSecondary}
           resetLabel={secondaryReset}
           accent="green"
           metaPosition="bottom"
         />
       </div>
-
-      {/* Actions */}
-      <div className="mt-3 flex items-center gap-1.5 border-t pt-3">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-7 gap-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground"
-          onClick={() => onAction?.(account, "details")}
-        >
-          <ExternalLink className="h-3 w-3" />
-          Details
-        </Button>
-        {status === "paused" && (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-7 gap-1.5 rounded-lg text-xs text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
-            onClick={() => onAction?.(account, "resume")}
-          >
-            <Play className="h-3 w-3" />
-            Resume
-          </Button>
-        )}
-        {status === "deactivated" && (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-7 gap-1.5 rounded-lg text-xs text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
-            onClick={() => onAction?.(account, "reauth")}
-          >
-            <RotateCcw className="h-3 w-3" />
-            Re-auth
-          </Button>
-        )}
-      </div>
-    </div>
+    </button>
   );
 }

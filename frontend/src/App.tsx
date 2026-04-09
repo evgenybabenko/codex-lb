@@ -16,7 +16,7 @@ function AppLayout() {
   const passwordRequired = useAuthStore((state) => state.passwordRequired);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background pb-10">
+    <div className="flex min-h-screen flex-col bg-background pb-24 sm:pb-16">
       <AppHeader
         onLogout={() => {
           void logout();

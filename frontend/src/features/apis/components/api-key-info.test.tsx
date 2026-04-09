@@ -129,7 +129,7 @@ describe("ApiKeyInfo", () => {
 		expect(screen.getByText("2 configured")).toBeInTheDocument();
 		expect(screen.getByText(/Total Tokens \(weekly, gpt-5.1\)/)).toBeInTheDocument();
 		expect(screen.getByText(/750K \/ 1M/)).toBeInTheDocument();
-		expect(screen.getByText(/Cost \(USD\) \(monthly, all\)/)).toBeInTheDocument();
+		expect(screen.getByText(/Cost \(\$\) \(monthly, All\)/)).toBeInTheDocument();
 		expect(screen.getByText(/\$1.50 \/ \$5.00/)).toBeInTheDocument();
 	});
 });

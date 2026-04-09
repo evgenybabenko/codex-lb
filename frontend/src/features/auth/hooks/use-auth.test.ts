@@ -21,6 +21,7 @@ const sessionBase: AuthSession = {
   passwordRequired: true,
   totpRequiredOnLogin: false,
   totpConfigured: true,
+  bootstrapTokenRequired: false,
 };
 
 function resetAuthStore(): void {
@@ -29,6 +30,7 @@ function resetAuthStore(): void {
     authenticated: false,
     totpRequiredOnLogin: false,
     totpConfigured: false,
+    bootstrapTokenRequired: false,
     loading: false,
     initialized: false,
     error: null,
@@ -46,6 +48,7 @@ describe("useAuthStore actions", () => {
       ...sessionBase,
       authenticated: false,
       totpRequiredOnLogin: true,
+      bootstrapTokenRequired: true,
     });
 
     await useAuthStore.getState().refreshSession();
@@ -54,6 +57,7 @@ describe("useAuthStore actions", () => {
     expect(next.initialized).toBe(true);
     expect(next.authenticated).toBe(false);
     expect(next.totpRequiredOnLogin).toBe(true);
+    expect(next.bootstrapTokenRequired).toBe(true);
     expect(next.loading).toBe(false);
   });
 

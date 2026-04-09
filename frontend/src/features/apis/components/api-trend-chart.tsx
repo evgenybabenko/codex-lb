@@ -12,6 +12,7 @@ import {
 import { useChartColors } from "@/hooks/use-chart-colors";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { ApiKeyTrendPoint } from "@/features/apis/schemas";
+import { useT } from "@/lib/i18n";
 import { formatCompactNumber, formatCurrency } from "@/utils/formatters";
 
 type MergedPoint = {
@@ -57,11 +58,6 @@ function formatTokenTick(value: number): string {
   return String(value);
 }
 
-const SERIES_META: Record<string, { label: string; formatter: (v: number) => string }> = {
-  cost: { label: "Cost", formatter: formatCurrency },
-  tokens: { label: "Tokens", formatter: (v) => formatCompactNumber(v) },
-};
-
 type ChartTooltipPayloadEntry = {
   dataKey?: string | number;
   value?: number;
@@ -75,6 +71,11 @@ type ChartTooltipProps = {
 };
 
 function CustomTooltip({ active, payload, label }: ChartTooltipProps) {
+  const t = useT();
+  const seriesMeta: Record<string, { label: string; formatter: (v: number) => string }> = {
+    cost: { label: t("apiChartCost"), formatter: formatCurrency },
+    tokens: { label: t("apiChartTokens"), formatter: (v) => formatCompactNumber(v) },
+  };
   if (!active || !payload?.length) return null;
   const d = new Date(label as string);
   const heading = d.toLocaleString(undefined, {
@@ -87,7 +88,7 @@ function CustomTooltip({ active, payload, label }: ChartTooltipProps) {
     <div className="rounded-lg border bg-popover px-3 py-2 text-popover-foreground shadow-md">
       <p className="mb-1 text-[11px] text-muted-foreground">{heading}</p>
       {payload.map((entry: ChartTooltipPayloadEntry) => {
-        const meta = SERIES_META[entry.dataKey as string];
+        const meta = seriesMeta[entry.dataKey as string];
         return (
           <div key={entry.dataKey} className="flex items-center gap-2 text-xs">
             <span
@@ -113,6 +114,7 @@ export type ApiTrendChartProps = {
 };
 
 export function ApiTrendChart({ cost, tokens }: ApiTrendChartProps) {
+  const t = useT();
   const chartColors = useChartColors();
   const reducedMotion = useReducedMotion();
   const c1 = chartColors[0];
@@ -125,7 +127,7 @@ export function ApiTrendChart({ cost, tokens }: ApiTrendChartProps) {
   if (data.length === 0) {
     return (
       <div className="flex h-[280px] items-center justify-center text-xs text-muted-foreground">
-        No trend data available
+        {t("dashboardNoTrendData")}
       </div>
     );
   }

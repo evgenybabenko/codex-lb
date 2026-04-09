@@ -7,6 +7,10 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vitest/config";
 
 const proxyTarget = process.env.API_PROXY_TARGET || "http://localhost:2455";
+const hmrHost = process.env.VITE_HMR_HOST || undefined;
+const hmrClientPort = process.env.VITE_HMR_CLIENT_PORT
+  ? Number(process.env.VITE_HMR_CLIENT_PORT)
+  : undefined;
 const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version?: string };
 const appVersion = packageJson.version ?? "0.0.0";
 
@@ -21,6 +25,12 @@ export default defineConfig({
     },
   },
   server: {
+    hmr: hmrHost || hmrClientPort
+      ? {
+          host: hmrHost,
+          clientPort: hmrClientPort,
+        }
+      : undefined,
     proxy: {
       "/api": proxyTarget,
       "/v1": proxyTarget,

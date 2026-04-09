@@ -4,8 +4,12 @@ import { describe, expect, it } from "vitest";
 
 import { StatsGrid } from "@/features/dashboard/components/stats-grid";
 
-const EMPTY_TREND: { value: number }[] = [];
-const SAMPLE_TREND = [{ value: 1 }, { value: 2 }, { value: 3 }];
+const EMPTY_TREND: { value: number; t: string; label: string }[] = [];
+const SAMPLE_TREND = [
+  { value: 1, t: "2026-04-01T00:00:00.000Z", label: "Apr 1" },
+  { value: 2, t: "2026-04-04T00:00:00.000Z", label: "Apr 4" },
+  { value: 3, t: "2026-04-08T00:00:00.000Z", label: "Apr 8" },
+];
 
 describe("StatsGrid", () => {
   it("renders four metric cards with values", () => {
@@ -26,6 +30,8 @@ describe("StatsGrid", () => {
     expect(screen.getByText("45K")).toBeInTheDocument();
     expect(screen.getByText("Cost (7d)")).toBeInTheDocument();
     expect(screen.getByText("Avg/hr $0.01")).toBeInTheDocument();
+    expect(screen.getAllByText("Apr 1").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Apr 8").length).toBeGreaterThan(0);
     expect(screen.getByText("Error rate")).toBeInTheDocument();
     expect(screen.getByText("Top: rate_limit_exceeded")).toBeInTheDocument();
   });

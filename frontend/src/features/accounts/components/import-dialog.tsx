@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useT } from "@/lib/i18n";
 import { Label } from "@/components/ui/label";
 
 export type ImportDialogProps = {
@@ -28,6 +29,7 @@ export function ImportDialog({
   onOpenChange,
   onImport,
 }: ImportDialogProps) {
+  const t = useT();
   const [file, setFile] = useState<File | null>(null);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -44,13 +46,13 @@ export function ImportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Import auth.json</DialogTitle>
-          <DialogDescription>Upload an exported account auth.json file. Workspace metadata is detected automatically when available.</DialogDescription>
+          <DialogTitle>{t("accountImportTitle")}</DialogTitle>
+          <DialogDescription>{t("accountImportDescription")}</DialogDescription>
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
-            <Label htmlFor="auth-json-file">File</Label>
+            <Label htmlFor="auth-json-file">{t("accountImportFile")}</Label>
             <Input
               id="auth-json-file"
               type="file"
@@ -67,7 +69,7 @@ export function ImportDialog({
 
           <DialogFooter>
             <Button type="submit" disabled={busy || !file}>
-              Import
+              {t("commonImport")}
             </Button>
           </DialogFooter>
         </form>

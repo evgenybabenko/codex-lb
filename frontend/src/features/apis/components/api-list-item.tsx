@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import type { ApiKey } from "@/features/api-keys/schemas";
+import { useT } from "@/lib/i18n";
 
 export type ApiListItemProps = {
   apiKey: ApiKey;
@@ -48,6 +49,7 @@ function isExpired(apiKey: ApiKey): boolean {
 }
 
 export function ApiListItem({ apiKey, selected, onSelect }: ApiListItemProps) {
+  const t = useT();
   const limitPct = formatLimitPercent(apiKey);
   const expired = isExpired(apiKey);
 
@@ -73,7 +75,7 @@ export function ApiListItem({ apiKey, selected, onSelect }: ApiListItemProps) {
               : "bg-emerald-500 text-white",
           )}
         >
-          {!apiKey.isActive ? "Disabled" : expired ? "Expired" : "Active"}
+          {!apiKey.isActive ? t("commonDisabled") : expired ? t("apiStatusExpired") : t("commonActive")}
         </Badge>
       </div>
       <div className="mt-1.5">

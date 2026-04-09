@@ -2,6 +2,7 @@ import { Pause, Play, RefreshCw, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { AccountSummary } from "@/features/accounts/schemas";
+import { useT } from "@/lib/i18n";
 
 export type AccountActionsProps = {
   account: AccountSummary;
@@ -20,6 +21,7 @@ export function AccountActions({
   onDelete,
   onReauth,
 }: AccountActionsProps) {
+  const t = useT();
   return (
     <div className="flex flex-wrap gap-2 border-t pt-4">
       {account.status === "paused" ? (
@@ -31,7 +33,7 @@ export function AccountActions({
           disabled={busy}
         >
           <Play className="h-3.5 w-3.5" />
-          Resume
+          {t("accountActionResume")}
         </Button>
       ) : (
         <Button
@@ -43,7 +45,7 @@ export function AccountActions({
           disabled={busy}
         >
           <Pause className="h-3.5 w-3.5" />
-          Pause
+          {t("accountActionPause")}
         </Button>
       )}
 
@@ -57,7 +59,7 @@ export function AccountActions({
           disabled={busy}
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          Re-authenticate
+          {t("accountActionReauth")}
         </Button>
       ) : null}
 
@@ -70,7 +72,7 @@ export function AccountActions({
         disabled={busy}
       >
         <Trash2 className="h-3.5 w-3.5" />
-        Delete
+        {t("commonDelete")}
       </Button>
     </div>
   );

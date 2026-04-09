@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { STATUS_LABELS } from "@/utils/constants";
 
@@ -17,8 +18,16 @@ export type StatusBadgeProps = {
 };
 
 export function StatusBadge({ status }: StatusBadgeProps) {
+  const t = useT();
   const className = statusClassMap[status] ?? statusClassMap.deactivated;
-  const label = STATUS_LABELS[status] ?? status;
+  const label =
+    {
+      active: t("statusActive"),
+      paused: t("statusPaused"),
+      limited: t("statusLimited"),
+      exceeded: t("statusExceeded"),
+      deactivated: t("statusDeactivated"),
+    }[status] ?? STATUS_LABELS[status] ?? status;
 
   return (
     <Badge className={cn("gap-1.5", className)} variant="outline">

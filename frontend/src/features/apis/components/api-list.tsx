@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { ApiListItem } from "@/features/apis/components/api-list-item";
 import type { ApiKey } from "@/features/api-keys/schemas";
+import { useT } from "@/lib/i18n";
 
 const STATUS_FILTER_OPTIONS = ["all", "active", "disabled", "expired"];
 
@@ -37,6 +38,7 @@ function matchStatus(apiKey: ApiKey, filter: string): boolean {
 }
 
 export function ApiList({ apiKeys, selectedKeyId, onSelect, onOpenCreate }: ApiListProps) {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -58,7 +60,7 @@ export function ApiList({ apiKeys, selectedKeyId, onSelect, onOpenCreate }: ApiL
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" aria-hidden />
           <Input
-            placeholder="Search API keys..."
+            placeholder={t("apiListSearchPlaceholder")}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="h-8 pl-8"
@@ -66,12 +68,18 @@ export function ApiList({ apiKeys, selectedKeyId, onSelect, onOpenCreate }: ApiL
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger size="sm" className="w-32 shrink-0">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder={t("commonStatus")} />
           </SelectTrigger>
           <SelectContent>
             {STATUS_FILTER_OPTIONS.map((option) => (
               <SelectItem key={option} value={option}>
-                {option === "all" ? "All statuses" : option.charAt(0).toUpperCase() + option.slice(1)}
+                {option === "all"
+                  ? t("commonAllStatuses")
+                  : option === "active"
+                    ? t("commonActive")
+                    : option === "disabled"
+                      ? t("commonDisabled")
+                      : t("apiStatusExpired")}
               </SelectItem>
             ))}
           </SelectContent>
@@ -80,14 +88,14 @@ export function ApiList({ apiKeys, selectedKeyId, onSelect, onOpenCreate }: ApiL
 
       <Button type="button" size="sm" onClick={onOpenCreate} className="h-8 w-full gap-1.5 text-xs">
         <Plus className="h-3.5 w-3.5" />
-        Create API Key
+        {t("apiListCreateKey")}
       </Button>
 
       <div className="max-h-[calc(100vh-16rem)] space-y-1 overflow-y-auto p-1">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed p-6 text-center">
-            <p className="text-sm font-medium text-muted-foreground">No matching API keys</p>
-            <p className="text-xs text-muted-foreground/70">Try adjusting your filters.</p>
+            <p className="text-sm font-medium text-muted-foreground">{t("apiListNoMatches")}</p>
+            <p className="text-xs text-muted-foreground/70">{t("accountListAdjustFilters")}</p>
           </div>
         ) : (
           filtered.map((apiKey) => (

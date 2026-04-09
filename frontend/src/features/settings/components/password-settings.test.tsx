@@ -21,6 +21,7 @@ describe("PasswordSettings", () => {
     vi.clearAllMocks();
     useAuthStore.setState({
       passwordRequired: false,
+      bootstrapTokenRequired: false,
       refreshSession: vi.fn().mockResolvedValue(undefined),
     });
   });
@@ -52,6 +53,28 @@ describe("PasswordSettings", () => {
     await user.type(screen.getByLabelText("Password"), "new-password-1");
     await user.click(screen.getAllByRole("button", { name: "Set password" }).find((btn) => btn.getAttribute("type") === "submit")!);
     expect(setupPassword).toHaveBeenCalledWith({ password: "new-password-1" });
+  });
+
+  it("shows bootstrap token field and submits it when required", async () => {
+    const user = userEvent.setup();
+    vi.mocked(setupPassword).mockResolvedValue({} as never);
+    useAuthStore.setState({ bootstrapTokenRequired: true });
+
+    render(<PasswordSettings />);
+
+    await user.click(screen.getByRole("button", { name: "Set password" }));
+    await user.type(screen.getByLabelText("Password"), "new-password-1");
+    await user.type(screen.getByLabelText("Bootstrap token"), "bootstrap-secret");
+    await user.click(
+      screen
+        .getAllByRole("button", { name: "Set password" })
+        .find((btn) => btn.getAttribute("type") === "submit")!,
+    );
+
+    expect(setupPassword).toHaveBeenCalledWith({
+      password: "new-password-1",
+      bootstrapToken: "bootstrap-secret",
+    });
   });
 
   it("handles change flow via dialog", async () => {

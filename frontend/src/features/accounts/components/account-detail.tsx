@@ -7,6 +7,7 @@ import { AccountTokenInfo } from "@/features/accounts/components/account-token-i
 import { AccountUsagePanel } from "@/features/accounts/components/account-usage-panel";
 import type { AccountSummary } from "@/features/accounts/schemas";
 import { useAccountTrends } from "@/features/accounts/hooks/use-accounts";
+import { useT } from "@/lib/i18n";
 import { formatWorkspaceLabel, formatWorkspaceTitle } from "@/utils/account-identifiers";
 
 export type AccountDetailProps = {
@@ -28,6 +29,7 @@ export function AccountDetail({
   onDelete,
   onReauth,
 }: AccountDetailProps) {
+  const t = useT();
   const { data: trends } = useAccountTrends(account?.accountId ?? null);
   const blurred = usePrivacyStore((s) => s.blurred);
 
@@ -37,8 +39,8 @@ export function AccountDetail({
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
           <User className="h-5 w-5 text-muted-foreground" />
         </div>
-        <p className="mt-3 text-sm font-medium text-muted-foreground">Select an account</p>
-        <p className="mt-1 text-xs text-muted-foreground/70">Choose an account from the list to view details.</p>
+        <p className="mt-3 text-sm font-medium text-muted-foreground">{t("accountSelectTitle")}</p>
+        <p className="mt-1 text-xs text-muted-foreground/70">{t("accountSelectDescription")}</p>
       </div>
     );
   }
@@ -47,7 +49,9 @@ export function AccountDetail({
   const titleIsEmail = isEmailLabel(title, account.email);
   const workspaceLabel = formatWorkspaceLabel(account);
   const workspaceTitle = formatWorkspaceTitle(account);
-  const planLabel = account.planType;
+  const subtitle = workspaceLabel
+    ? t("accountCardContextWorkspace", { value: workspaceLabel })
+    : account.planType;
 
   return (
     <div key={account.accountId} className="animate-fade-in-up space-y-4 rounded-xl border bg-card p-5">
@@ -58,9 +62,13 @@ export function AccountDetail({
         </h2>
         <p
           className="mt-0.5 text-xs text-muted-foreground"
-          title={[workspaceTitle, showAccountId ? `Account ID ${account.accountId}` : null].filter(Boolean).join(" | ") || undefined}
+          title={
+            [workspaceTitle, showAccountId ? t("accountTooltipId", { id: account.accountId }) : null]
+              .filter(Boolean)
+              .join(" | ") || undefined
+          }
         >
-          {workspaceLabel ? `${planLabel} | ${workspaceLabel}` : planLabel}
+          {subtitle}
         </p>
       </div>
 

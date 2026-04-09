@@ -1,26 +1,63 @@
 import { RESET_ERROR_LABEL } from "@/utils/constants";
+import { getCurrentLocale, getIntlLocale, getMessage } from "@/lib/i18n";
 
-const numberFormatter = new Intl.NumberFormat("en-US");
-const compactFormatter = new Intl.NumberFormat("en-US", {
-  notation: "compact",
-  maximumFractionDigits: 2,
-});
-const currencyFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-const timeFormatter = new Intl.DateTimeFormat("en-US", {
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-});
-const dateFormatter = new Intl.DateTimeFormat("en-US", {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
+function createNumberFormatter() {
+  return new Intl.NumberFormat(getIntlLocale());
+}
+
+function createCompactFormatter() {
+  return new Intl.NumberFormat(getIntlLocale(), {
+    notation: "compact",
+    maximumFractionDigits: 2,
+  });
+}
+
+function createMetricFormatter() {
+  return new Intl.NumberFormat(getIntlLocale(), {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+function createCurrencyFormatter() {
+  return new Intl.NumberFormat(getIntlLocale(), {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function createTimeFormatter() {
+  return new Intl.DateTimeFormat(getIntlLocale(), {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function createDateFormatter() {
+  return new Intl.DateTimeFormat(getIntlLocale(), {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function unitLabel(unit: "day" | "hour" | "minute"): string {
+  if (getCurrentLocale() === "ru") {
+    return { day: "д", hour: "ч", minute: "м" }[unit];
+  }
+  return { day: "d", hour: "h", minute: "m" }[unit];
+}
+
+function relativePrefix(): string {
+  return getCurrentLocale() === "ru" ? "через " : "in ";
+}
+
+function capitalize(value: string): string {
+  return value.length > 0 ? value[0].toUpperCase() + value.slice(1) : value;
+}
 
 export type FormattedDateTime = {
   time: string;
@@ -72,17 +109,50 @@ export function parseDate(iso: string | null | undefined): Date | null {
 
 export function formatNumber(value: unknown): string {
   const numeric = toNumber(value);
-  return numeric === null ? "--" : numberFormatter.format(numeric);
+  return numeric === null ? "--" : createNumberFormatter().format(numeric);
 }
 
 export function formatCompactNumber(value: unknown): string {
   const numeric = toNumber(value);
-  return numeric === null ? "--" : compactFormatter.format(numeric);
+  return numeric === null ? "--" : createCompactFormatter().format(numeric);
+}
+
+export function formatCompactMetricNumber(value: unknown): string {
+  const numeric = toNumber(value);
+  if (numeric === null) {
+    return "--";
+  }
+
+  const absolute = Math.abs(numeric);
+  const sign = numeric < 0 ? "-" : "";
+  if (absolute < 1_000) {
+    return createMetricFormatter().format(numeric);
+  }
+
+  const units = [
+    { value: 1_000_000_000_000, suffix: "T" },
+    { value: 1_000_000_000, suffix: "B" },
+    { value: 1_000_000, suffix: "M" },
+    { value: 1_000, suffix: "K" },
+  ];
+
+  const unit = units.find((entry) => absolute >= entry.value);
+  if (!unit) {
+    return createMetricFormatter().format(numeric);
+  }
+
+  return `${sign}${createMetricFormatter().format(absolute / unit.value)}${unit.suffix}`;
+}
+
+export function formatAbsoluteQuotaPair(remaining: unknown, capacity: unknown): string {
+  const remainingValue = Math.max(0, toNumber(remaining) ?? 0);
+  const capacityValue = Math.max(0, toNumber(capacity) ?? 0);
+  return `${formatNumber(remainingValue)}/${formatNumber(capacityValue)}`;
 }
 
 export function formatCurrency(value: unknown): string {
   const numeric = toNumber(value);
-  return numeric === null ? "--" : currencyFormatter.format(numeric);
+  return numeric === null ? "--" : createCurrencyFormatter().format(numeric);
 }
 
 export function formatPercent(value: unknown): string {
@@ -117,12 +187,12 @@ export function formatWindowMinutes(value: unknown): string {
     return "--";
   }
   if (minutes % 1440 === 0) {
-    return `${minutes / 1440}d`;
+    return `${minutes / 1440}${unitLabel("day")}`;
   }
   if (minutes % 60 === 0) {
-    return `${minutes / 60}h`;
+    return `${minutes / 60}${unitLabel("hour")}`;
   }
-  return `${minutes}m`;
+  return `${minutes}${unitLabel("minute")}`;
 }
 
 export function formatWindowLabel(
@@ -151,17 +221,17 @@ export function formatTokensWithCached(totalTokens: unknown, cachedInputTokens: 
   if (cached === null || cached <= 0) {
     return formatCompactNumber(total);
   }
-  return `${formatCompactNumber(total)} (${formatCompactNumber(cached)} Cached)`;
+  return `${formatCompactNumber(total)} (${formatCompactNumber(cached)} ${capitalize(getMessage("commonCachedShort"))})`;
 }
 
 export function formatCachedTokensMeta(totalTokens: unknown, cachedInputTokens: unknown): string {
   const total = toNumber(totalTokens);
   const cached = toNumber(cachedInputTokens);
   if (total === null || total <= 0 || cached === null || cached <= 0) {
-    return "Cached: --";
+    return `${capitalize(getMessage("commonCachedShort"))}: --`;
   }
   const percent = Math.min(100, Math.max(0, (cached / total) * 100));
-  return `Cached: ${formatCompactNumber(cached)} (${Math.round(percent)}%)`;
+  return `${capitalize(getMessage("commonCachedShort"))}: ${formatCompactNumber(cached)} (${Math.round(percent)}%)`;
 }
 
 export function formatModelLabel(
@@ -185,44 +255,59 @@ export function formatTimeLong(iso: string | null | undefined): FormattedDateTim
     return { time: "--", date: "--" };
   }
   return {
-    time: timeFormatter.format(date),
-    date: dateFormatter.format(date),
+    time: createTimeFormatter().format(date),
+    date: createDateFormatter().format(date),
   };
+}
+
+export function formatDateShort(iso: string | null | undefined): string {
+  const date = parseDate(iso);
+  if (!date) {
+    return "--";
+  }
+  return new Intl.DateTimeFormat(getIntlLocale(), {
+    month: "short",
+    day: "numeric",
+  }).format(date);
 }
 
 export function formatRelative(ms: number): string {
   const minutes = Math.ceil(ms / 60_000);
   if (minutes < 60) {
-    return `in ${minutes}m`;
+    return `${relativePrefix()}${minutes}${unitLabel("minute")}`;
   }
   const hours = Math.ceil(minutes / 60);
   if (hours < 24) {
-    return `in ${hours}h`;
+    return `${relativePrefix()}${hours}${unitLabel("hour")}`;
   }
   const days = Math.ceil(hours / 24);
-  return `in ${days}d`;
+  return `${relativePrefix()}${days}${unitLabel("day")}`;
 }
 
 export function formatResetRelative(ms: number): string {
   if (ms <= 60_000) {
-    return "in 1m";
+    return `${relativePrefix()}1${unitLabel("minute")}`;
   }
 
   const totalMinutes = Math.floor(ms / 60_000);
   if (totalMinutes < 60) {
-    return `in ${totalMinutes}m`;
+    return `${relativePrefix()}${totalMinutes}${unitLabel("minute")}`;
   }
 
   if (totalMinutes < 1440) {
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-    return minutes > 0 ? `in ${hours}h ${minutes}m` : `in ${hours}h`;
+    return minutes > 0
+      ? `${relativePrefix()}${hours}${unitLabel("hour")} ${minutes}${unitLabel("minute")}`
+      : `${relativePrefix()}${hours}${unitLabel("hour")}`;
   }
 
   const totalHours = Math.floor(ms / 3_600_000);
   const days = Math.floor(totalHours / 24);
   const hours = totalHours % 24;
-  return hours > 0 ? `in ${days}d ${hours}h` : `in ${days}d`;
+  return hours > 0
+    ? `${relativePrefix()}${days}${unitLabel("day")} ${hours}${unitLabel("hour")}`
+    : `${relativePrefix()}${days}${unitLabel("day")}`;
 }
 
 export function formatCountdown(seconds: number): string {
@@ -239,7 +324,7 @@ export function formatQuotaResetLabel(resetAt: string | null | undefined): strin
   }
   const diffMs = date.getTime() - Date.now();
   if (diffMs <= 0) {
-    return "now";
+    return getCurrentLocale() === "ru" ? "сейчас" : "now";
   }
   return formatResetRelative(diffMs);
 }
@@ -251,9 +336,9 @@ export function formatQuotaResetMeta(
   const labelSecondary = formatQuotaResetLabel(resetAtSecondary);
   const windowSecondary = formatWindowLabel("secondary", windowMinutesSecondary);
   if (labelSecondary === RESET_ERROR_LABEL) {
-    return "Quota reset unavailable";
+    return getMessage("commonQuotaResetUnavailable");
   }
-  return `Quota reset (${windowSecondary}) · ${labelSecondary}`;
+  return `${getMessage("commonTimeframe")} (${windowSecondary}) · ${labelSecondary}`;
 }
 
 export function truncateText(value: unknown, maxLen = 80): string {
@@ -273,36 +358,36 @@ export function truncateText(value: unknown, maxLen = 80): string {
 export function formatAccessTokenLabel(auth: AccountAuthStatus | null | undefined): string {
   const expiresAt = auth?.access?.expiresAt;
   if (!expiresAt) {
-    return "Missing";
+    return getMessage("commonMissing");
   }
   const expiresDate = parseDate(expiresAt);
   if (!expiresDate) {
-    return "Unknown";
+    return getMessage("commonUnknown");
   }
   const diffMs = expiresDate.getTime() - Date.now();
   if (diffMs <= 0) {
-    return "Expired";
+    return getMessage("commonExpired");
   }
-  return `Valid (${formatRelative(diffMs)})`;
+  return `${getMessage("commonValid")} (${formatRelative(diffMs)})`;
 }
 
 export function formatRefreshTokenLabel(auth: AccountAuthStatus | null | undefined): string {
   const state = auth?.refresh?.state;
   const labelMap: Record<string, string> = {
-    stored: "Stored",
-    missing: "Missing",
-    expired: "Expired",
+    stored: getMessage("commonStored"),
+    missing: getMessage("commonMissing"),
+    expired: getMessage("commonExpired"),
   };
-  return state && labelMap[state] ? labelMap[state] : "Unknown";
+  return state && labelMap[state] ? labelMap[state] : getMessage("commonUnknown");
 }
 
 export function formatIdTokenLabel(auth: AccountAuthStatus | null | undefined): string {
   const state = auth?.idToken?.state;
   const labelMap: Record<string, string> = {
-    parsed: "Parsed",
-    unknown: "Unknown",
+    parsed: getMessage("commonParsed"),
+    unknown: getMessage("commonUnknown"),
   };
-  return state && labelMap[state] ? labelMap[state] : "Unknown";
+  return state && labelMap[state] ? labelMap[state] : getMessage("commonUnknown");
 }
 
 export function formatDateTimeLabel(value: string | null | undefined): string {

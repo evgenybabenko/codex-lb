@@ -17,19 +17,7 @@ import {
   type LimitType,
   type LimitWindowType,
 } from "@/features/api-keys/schemas";
-
-const LIMIT_TYPE_LABELS: Record<LimitType, string> = {
-  total_tokens: "Total Tokens",
-  input_tokens: "Input Tokens",
-  output_tokens: "Output Tokens",
-  cost_usd: "Cost ($)",
-};
-
-const WINDOW_LABELS: Record<LimitWindowType, string> = {
-  daily: "Daily",
-  weekly: "Weekly",
-  monthly: "Monthly",
-};
+import { useT } from "@/lib/i18n";
 
 const LIMIT_TYPE_SET: ReadonlySet<string> = new Set(LIMIT_TYPES);
 const LIMIT_WINDOW_SET: ReadonlySet<string> = new Set(LIMIT_WINDOWS);
@@ -49,6 +37,7 @@ export type LimitRuleCardProps = {
 };
 
 export function LimitRuleCard({ rule, onChange, onRemove }: LimitRuleCardProps) {
+  const t = useT();
   const isCost = rule.limitType === "cost_usd";
   const displayValue = isCost && rule.maxValue > 0
     ? String(rule.maxValue / 1_000_000)
@@ -91,7 +80,7 @@ export function LimitRuleCard({ rule, onChange, onRemove }: LimitRuleCardProps) 
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">Limit rule</span>
+        <span className="text-xs font-medium text-muted-foreground">{t("apiLimitRule")}</span>
         <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
           <Trash2 className="size-3.5" />
         </Button>
@@ -99,7 +88,7 @@ export function LimitRuleCard({ rule, onChange, onRemove }: LimitRuleCardProps) 
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-muted-foreground">Type</label>
+          <label className="text-xs text-muted-foreground">{t("apiLimitType")}</label>
           <Select value={rule.limitType} onValueChange={handleLimitTypeChange}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue />
@@ -107,7 +96,12 @@ export function LimitRuleCard({ rule, onChange, onRemove }: LimitRuleCardProps) 
             <SelectContent>
               {LIMIT_TYPES.map((k) => (
                 <SelectItem key={k} value={k}>
-                  {LIMIT_TYPE_LABELS[k]}
+                  {{
+                    total_tokens: t("apiLimitTypeTotalTokens"),
+                    input_tokens: t("apiLimitTypeInputTokens"),
+                    output_tokens: t("apiLimitTypeOutputTokens"),
+                    cost_usd: t("apiLimitTypeCostUsd"),
+                  }[k as LimitType]}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -115,7 +109,7 @@ export function LimitRuleCard({ rule, onChange, onRemove }: LimitRuleCardProps) 
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground">Window</label>
+          <label className="text-xs text-muted-foreground">{t("apiLimitWindow")}</label>
           <Select value={rule.limitWindow} onValueChange={handleWindowChange}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue />
@@ -123,7 +117,11 @@ export function LimitRuleCard({ rule, onChange, onRemove }: LimitRuleCardProps) 
             <SelectContent>
               {LIMIT_WINDOWS.map((k) => (
                 <SelectItem key={k} value={k}>
-                  {WINDOW_LABELS[k]}
+                  {{
+                    daily: t("apiLimitWindowDaily"),
+                    weekly: t("apiLimitWindowWeekly"),
+                    monthly: t("apiLimitWindowMonthly"),
+                  }[k as LimitWindowType]}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -133,7 +131,7 @@ export function LimitRuleCard({ rule, onChange, onRemove }: LimitRuleCardProps) 
 
       <div>
         <label className="text-xs text-muted-foreground">
-          {isCost ? "Max value (USD)" : "Max value (tokens)"}
+          {isCost ? t("apiLimitMaxUsd") : t("apiLimitMaxTokens")}
         </label>
         <Input
           type="number"
@@ -146,11 +144,11 @@ export function LimitRuleCard({ rule, onChange, onRemove }: LimitRuleCardProps) 
       </div>
 
       <div>
-        <label className="text-xs text-muted-foreground">Model filter</label>
+        <label className="text-xs text-muted-foreground">{t("apiLimitModelFilter")}</label>
         <ModelMultiSelect
           value={modelFilterArray}
           onChange={(models) => onChange({ ...rule, modelFilter: models[0] || null })}
-          placeholder="All models"
+          placeholder={t("commonAllModels")}
         />
       </div>
     </div>

@@ -3,6 +3,7 @@ import { Upload } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { buildSettingsUpdateRequest } from "@/features/settings/payload";
 import type { DashboardSettings, SettingsUpdateRequest } from "@/features/settings/schemas";
+import { useT } from "@/lib/i18n";
 
 export type ImportSettingsProps = {
   settings: DashboardSettings;
@@ -11,6 +12,7 @@ export type ImportSettingsProps = {
 };
 
 export function ImportSettings({ settings, busy, onSave }: ImportSettingsProps) {
+  const t = useT();
   const save = (patch: Partial<SettingsUpdateRequest>) =>
     void onSave(buildSettingsUpdateRequest(settings, patch));
 
@@ -23,17 +25,17 @@ export function ImportSettings({ settings, busy, onSave }: ImportSettingsProps) 
               <Upload className="h-4 w-4 text-primary" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold">Import</h3>
-              <p className="text-xs text-muted-foreground">Control how account import handles duplicates.</p>
+              <h3 className="text-sm font-semibold">{t("importSettingsTitle")}</h3>
+              <p className="text-xs text-muted-foreground">{t("importSettingsDescription")}</p>
             </div>
           </div>
         </div>
 
         <div className="flex items-center justify-between rounded-lg border p-3">
           <div>
-            <p className="text-sm font-medium">Allow import without overwrite</p>
+            <p className="text-sm font-medium">{t("importSettingsAllowNoOverwrite")}</p>
             <p className="text-xs text-muted-foreground">
-              Keep duplicate imports as separate accounts instead of replacing existing ones.
+              {t("importSettingsAllowNoOverwriteDescription")}
             </p>
           </div>
           <Switch
