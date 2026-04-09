@@ -24,7 +24,7 @@ from app.core.auth.refresh import (
     pop_token_refresh_timeout_override,
     push_token_refresh_timeout_override,
 )
-from app.core.balancer import PERMANENT_FAILURE_CODES, RoutingStrategy
+from app.core.balancer import PERMANENT_FAILURE_CODES, RoutingStrategy, WeeklyResetPreference
 from app.core.balancer.rendezvous_hash import select_node
 from app.core.balancer.types import UpstreamError
 from app.core.clients.proxy import (
@@ -138,6 +138,7 @@ _ACCOUNT_RECOVERY_RETRY_CODES = frozenset(
     {
         "rate_limit_exceeded",
         "usage_limit_reached",
+        "server_is_overloaded",
         "insufficient_quota",
         "usage_not_included",
         "quota_exceeded",
@@ -171,6 +172,7 @@ class ProxyService:
         self._ring_membership = RingMembershipService(SessionLocal)
         self._http_bridge_sessions: dict[_HTTPBridgeSessionKey, _HTTPBridgeSession] = {}
         self._http_bridge_inflight_sessions: dict[_HTTPBridgeSessionKey, asyncio.Future[_HTTPBridgeSession]] = {}
+        self._http_bridge_inflight_previous_response_recoverable: dict[_HTTPBridgeSessionKey, bool] = {}
         self._http_bridge_turn_state_index: dict[tuple[str, str | None], _HTTPBridgeSessionKey] = {}
         self._http_bridge_lock = anyio.Lock()
 
@@ -404,7 +406,8 @@ class ProxyService:
         actual_service_tier: str | None = None
 
         settings = await get_settings_cache().get()
-        prefer_earlier_reset = settings.prefer_earlier_reset_accounts
+        weekly_reset_preference = _weekly_reset_preference(settings)
+        prioritize_full_weekly_capacity = _prioritize_full_weekly_capacity(settings)
         had_prompt_cache_key = _prompt_cache_key_from_request_model(payload) is not None
         affinity = _sticky_key_for_compact_request(
             payload,
@@ -466,7 +469,8 @@ class ProxyService:
                     sticky_kind=affinity.kind,
                     reallocate_sticky=affinity.reallocate_sticky,
                     sticky_max_age_seconds=affinity.max_age_seconds,
-                    prefer_earlier_reset_accounts=prefer_earlier_reset,
+                    weekly_reset_preference=weekly_reset_preference,
+                    prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
                     routing_strategy=routing_strategy,
                     model=payload.model,
                 )
@@ -628,6 +632,7 @@ class ProxyService:
             log_error_code = log_error_code or _normalize_error_code(
                 error.code if error else None,
                 error.type if error else None,
+                error.message if error else None,
             )
             log_error_message = log_error_message or (error.message if error else None)
             raise
@@ -685,14 +690,14 @@ class ProxyService:
         transcribe_model = "gpt-4o-transcribe"
 
         settings = await get_settings_cache().get()
-        prefer_earlier_reset = settings.prefer_earlier_reset_accounts
+        weekly_reset_preference = _weekly_reset_preference(settings)
         routing_strategy = _routing_strategy(settings)
         try:
             selection = await self._select_account_with_budget(
                 deadline,
                 request_id=request_id,
                 kind="transcribe",
-                prefer_earlier_reset_accounts=prefer_earlier_reset,
+                weekly_reset_preference=weekly_reset_preference,
                 routing_strategy=routing_strategy,
                 model=None,
             )
@@ -808,6 +813,7 @@ class ProxyService:
             log_error_code = log_error_code or _normalize_error_code(
                 error.code if error else None,
                 error.type if error else None,
+                error.message if error else None,
             )
             log_error_message = log_error_message or (error.message if error else None)
             raise
@@ -836,7 +842,7 @@ class ProxyService:
         filtered_headers = filter_inbound_websocket_headers(dict(headers))
         runtime_settings = get_settings()
         settings = await get_settings_cache().get()
-        prefer_earlier_reset = settings.prefer_earlier_reset_accounts
+        weekly_reset_preference = _weekly_reset_preference(settings)
         sticky_threads_enabled = settings.sticky_threads_enabled
         openai_cache_affinity_max_age_seconds = settings.openai_cache_affinity_max_age_seconds
         routing_strategy = _routing_strategy(settings)
@@ -975,7 +981,7 @@ class ProxyService:
                         sticky_kind=request_affinity.kind,
                         reallocate_sticky=request_affinity.reallocate_sticky,
                         sticky_max_age_seconds=request_affinity.max_age_seconds,
-                        prefer_earlier_reset=prefer_earlier_reset,
+                        weekly_reset_preference=weekly_reset_preference,
                         routing_strategy=routing_strategy,
                         model=request_state.model,
                         request_state=request_state,
@@ -1184,7 +1190,7 @@ class ProxyService:
         *,
         sticky_key: str | None,
         sticky_kind: StickySessionKind | None,
-        prefer_earlier_reset: bool,
+        weekly_reset_preference: WeeklyResetPreference,
         routing_strategy: RoutingStrategy,
         model: str | None,
         request_state: _WebSocketRequestState,
@@ -1204,7 +1210,7 @@ class ProxyService:
                 sticky_kind=sticky_kind,
                 reallocate_sticky=reallocate_sticky,
                 sticky_max_age_seconds=sticky_max_age_seconds,
-                prefer_earlier_reset_accounts=prefer_earlier_reset,
+                weekly_reset_preference=weekly_reset_preference,
                 routing_strategy=routing_strategy,
                 model=model,
             )
@@ -1461,6 +1467,7 @@ class ProxyService:
             sessions_to_close: list[_HTTPBridgeSession] = []
             inflight_future: asyncio.Future[_HTTPBridgeSession] | None = None
             capacity_wait_future: asyncio.Future[_HTTPBridgeSession] | None = None
+            stale_session_to_revive: _HTTPBridgeSession | None = None
             owns_creation = False
             continuity_error: ProxyResponseError | None = None
 
@@ -1493,18 +1500,7 @@ class ProxyService:
                         key = _HTTPBridgeSessionKey("turn_state_header", incoming_turn_state, api_key_id)
                         if self._http_bridge_inflight_sessions.get(key) is not None:
                             pass
-                        elif previous_response_id is not None:
-                            raise ProxyResponseError(
-                                400,
-                                _http_bridge_previous_response_error_envelope(
-                                    previous_response_id,
-                                    (
-                                        "HTTP bridge continuity was lost. Replay x-codex-turn-state "
-                                        "or retry with a stable prompt_cache_key."
-                                    ),
-                                ),
-                            )
-                        else:
+                        elif previous_response_id is None:
                             raise ProxyResponseError(
                                 409,
                                 openai_error(
@@ -1514,9 +1510,18 @@ class ProxyService:
                                 ),
                             )
 
-                await self._prune_http_bridge_sessions_locked()
-
                 existing = self._http_bridge_sessions.get(key)
+                preserve_stale_existing_for_previous_response = (
+                    previous_response_id is not None
+                    and key.affinity_kind != "turn_state_header"
+                    and existing is not None
+                    and existing.closed
+                    and existing.account.status == AccountStatus.ACTIVE
+                    and _preferred_http_bridge_reconnect_turn_state(existing) is not None
+                )
+                if not preserve_stale_existing_for_previous_response:
+                    await self._prune_http_bridge_sessions_locked()
+                    existing = self._http_bridge_sessions.get(key)
                 if existing is not None and not existing.closed and existing.account.status == AccountStatus.ACTIVE:
                     existing.request_model = request_model
                     existing.last_used_at = time.monotonic()
@@ -1585,18 +1590,44 @@ class ProxyService:
                     sessions_to_close.append(existing)
 
                 inflight_future = self._http_bridge_inflight_sessions.get(key)
-                if previous_response_id is not None:
-                    continuity_error = ProxyResponseError(
-                        400,
-                        _http_bridge_previous_response_error_envelope(
-                            previous_response_id,
-                            (
-                                "HTTP bridge continuity was lost. Replay x-codex-turn-state "
-                                "or retry with a stable prompt_cache_key."
+                if previous_response_id is not None and key.affinity_kind != "turn_state_header":
+                    if (
+                        inflight_future is None
+                        and existing is not None
+                        and existing.closed
+                        and existing.account.status == AccountStatus.ACTIVE
+                        and _preferred_http_bridge_reconnect_turn_state(existing) is not None
+                    ):
+                        self._http_bridge_sessions.pop(key, None)
+                        stale_session_to_revive = existing
+                        inflight_future = asyncio.get_running_loop().create_future()
+                        self._http_bridge_inflight_sessions[key] = inflight_future
+                        self._http_bridge_inflight_previous_response_recoverable[key] = True
+                        owns_creation = True
+                        _log_http_bridge_event(
+                            "revive_stale",
+                            key,
+                            account_id=existing.account.id,
+                            model=existing.request_model,
+                            cache_key_family=key.affinity_kind,
+                            model_class=_extract_model_class(existing.request_model)
+                            if existing.request_model
+                            else None,
+                        )
+                    elif inflight_future is None or not self._http_bridge_inflight_previous_response_recoverable.get(
+                        key, False
+                    ):
+                        continuity_error = ProxyResponseError(
+                            400,
+                            _http_bridge_previous_response_error_envelope(
+                                previous_response_id,
+                                (
+                                    "HTTP bridge continuity was lost. Replay x-codex-turn-state "
+                                    "or retry with a stable prompt_cache_key."
+                                ),
                             ),
-                        ),
-                    )
-                else:
+                        )
+                if continuity_error is None and stale_session_to_revive is None:
                     if inflight_future is None:
                         while (
                             len(self._http_bridge_sessions) + len(self._http_bridge_inflight_sessions) >= max_sessions
@@ -1652,6 +1683,7 @@ class ProxyService:
                         else:
                             inflight_future = asyncio.get_running_loop().create_future()
                             self._http_bridge_inflight_sessions[key] = inflight_future
+                            self._http_bridge_inflight_previous_response_recoverable[key] = False
                             owns_creation = True
 
             for stale_session in sessions_to_close:
@@ -1688,6 +1720,54 @@ class ProxyService:
                     return session
                 continue
 
+            if stale_session_to_revive is not None:
+                revived_session: _HTTPBridgeSession | None = None
+                session_registered = False
+                revive_request_state = _WebSocketRequestState(
+                    request_id=f"http_bridge_revive_{uuid4().hex}",
+                    model=request_model,
+                    service_tier=None,
+                    reasoning_effort=None,
+                    api_key_reservation=None,
+                    started_at=time.monotonic(),
+                    transport=_REQUEST_TRANSPORT_HTTP,
+                )
+                try:
+                    stale_session_to_revive.request_model = request_model
+                    await self._reconnect_http_bridge_session(
+                        stale_session_to_revive,
+                        request_state=revive_request_state,
+                        restart_reader=True,
+                    )
+                    revived_session = stale_session_to_revive
+                    revived_session.last_used_at = time.monotonic()
+                    async with self._http_bridge_lock:
+                        current_future = self._http_bridge_inflight_sessions.get(key)
+                        if current_future is inflight_future:
+                            self._http_bridge_inflight_sessions.pop(key, None)
+                            self._http_bridge_inflight_previous_response_recoverable.pop(key, None)
+                            self._http_bridge_sessions[key] = revived_session
+                            session_registered = True
+                            if inflight_future is not None and not inflight_future.done():
+                                inflight_future.set_result(revived_session)
+                except BaseException as exc:
+                    async with self._http_bridge_lock:
+                        current_future = self._http_bridge_inflight_sessions.get(key)
+                        if current_future is inflight_future:
+                            self._http_bridge_inflight_sessions.pop(key, None)
+                            self._http_bridge_inflight_previous_response_recoverable.pop(key, None)
+                            if inflight_future is not None and not inflight_future.done():
+                                if isinstance(exc, asyncio.CancelledError):
+                                    inflight_future.cancel()
+                                else:
+                                    inflight_future.set_exception(exc)
+                                    inflight_future.exception()
+                    if revived_session is not None and not session_registered:
+                        await self._close_http_bridge_session(revived_session)
+                    raise
+                assert revived_session is not None
+                return revived_session
+
             created_session: _HTTPBridgeSession | None = None
             session_registered = False
             try:
@@ -1702,6 +1782,7 @@ class ProxyService:
                     current_future = self._http_bridge_inflight_sessions.get(key)
                     if current_future is inflight_future:
                         self._http_bridge_inflight_sessions.pop(key, None)
+                        self._http_bridge_inflight_previous_response_recoverable.pop(key, None)
                         self._http_bridge_sessions[key] = created_session
                         session_registered = True
                         if inflight_future is not None and not inflight_future.done():
@@ -1711,6 +1792,7 @@ class ProxyService:
                     current_future = self._http_bridge_inflight_sessions.get(key)
                     if current_future is inflight_future:
                         self._http_bridge_inflight_sessions.pop(key, None)
+                        self._http_bridge_inflight_previous_response_recoverable.pop(key, None)
                         if inflight_future is not None and not inflight_future.done():
                             if isinstance(exc, asyncio.CancelledError):
                                 inflight_future.cancel()
@@ -1750,6 +1832,7 @@ class ProxyService:
             sessions_to_close = list(self._http_bridge_sessions.values())
             self._http_bridge_sessions.clear()
             self._http_bridge_inflight_sessions.clear()
+            self._http_bridge_inflight_previous_response_recoverable.clear()
 
         for session in sessions_to_close:
             await self._close_http_bridge_session(session)
@@ -1876,7 +1959,7 @@ class ProxyService:
             sticky_kind=affinity.kind,
             reallocate_sticky=affinity.reallocate_sticky,
             sticky_max_age_seconds=affinity.max_age_seconds,
-            prefer_earlier_reset_accounts=settings.prefer_earlier_reset_accounts,
+            weekly_reset_preference=_weekly_reset_preference(settings),
             routing_strategy=_routing_strategy(settings),
             model=request_model,
         )
@@ -2239,7 +2322,7 @@ class ProxyService:
         request_state: _WebSocketRequestState,
         text_data: str,
     ) -> bool:
-        if request_state.previous_response_id is not None:
+        if request_state.previous_response_id is not None and _preferred_http_bridge_reconnect_turn_state(session) is None:
             _mark_request_state_previous_response_not_found(
                 request_state,
                 (
@@ -2284,7 +2367,10 @@ class ProxyService:
                 return False
             if not request_state.request_text:
                 return False
-            if request_state.previous_response_id is not None:
+            if (
+                request_state.previous_response_id is not None
+                and _preferred_http_bridge_reconnect_turn_state(session) is None
+            ):
                 _mark_request_state_previous_response_not_found(
                     request_state,
                     (
@@ -2353,7 +2439,7 @@ class ProxyService:
             sticky_kind=session.affinity.kind,
             reallocate_sticky=session.affinity.reallocate_sticky,
             sticky_max_age_seconds=session.affinity.max_age_seconds,
-            prefer_earlier_reset_accounts=settings.prefer_earlier_reset_accounts,
+            weekly_reset_preference=_weekly_reset_preference(settings),
             routing_strategy=_routing_strategy(settings),
             model=session.request_model,
         )
@@ -2459,10 +2545,18 @@ class ProxyService:
             error_code = None
             if event_type == "error":
                 error = event.error if event else None
-                error_code = _normalize_error_code(error.code if error else None, error.type if error else None)
+                error_code = _normalize_error_code(
+                    error.code if error else None,
+                    error.type if error else None,
+                    error.message if error else None,
+                )
             elif event and event.response:
                 error = event.response.error
-                error_code = _normalize_error_code(error.code if error else None, error.type if error else None)
+                error_code = _normalize_error_code(
+                    error.code if error else None,
+                    error.type if error else None,
+                    error.message if error else None,
+                )
             _log_http_bridge_event(
                 "terminal_error",
                 session.key,
@@ -2500,7 +2594,11 @@ class ProxyService:
 
     async def _handle_websocket_connect_error(self, account: Account, exc: ProxyResponseError) -> None:
         error = _parse_openai_error(exc.payload)
-        error_code = _normalize_error_code(error.code if error else None, error.type if error else None)
+        error_code = _normalize_error_code(
+            error.code if error else None,
+            error.type if error else None,
+            error.message if error else None,
+        )
         await self._handle_stream_error(
             account,
             _upstream_error_from_openai(error),
@@ -2768,13 +2866,21 @@ class ProxyService:
         if event_type == "error":
             status = "error"
             error = event.error if event else None
-            error_code = _normalize_error_code(error.code if error else None, error.type if error else None)
+            error_code = _normalize_error_code(
+                error.code if error else None,
+                error.type if error else None,
+                error.message if error else None,
+            )
             error_message = error.message if error else None
             error_payload = _upstream_error_from_openai(error)
         elif event_type in {"response.failed", "response.incomplete"}:
             status = "error"
             error = event.response.error if event and event.response else None
-            error_code = _normalize_error_code(error.code if error else None, error.type if error else None)
+            error_code = _normalize_error_code(
+                error.code if error else None,
+                error.type if error else None,
+                error.message if error else None,
+            )
             error_message = error.message if error else None
             if event_type == "response.failed":
                 error_payload = _upstream_error_from_openai(error)
@@ -3239,7 +3345,7 @@ class ProxyService:
         base_settings = get_settings()
         settings = await get_settings_cache().get()
         deadline = start + base_settings.proxy_request_budget_seconds
-        prefer_earlier_reset = settings.prefer_earlier_reset_accounts
+        weekly_reset_preference = _weekly_reset_preference(settings)
         upstream_stream_transport = _resolve_upstream_stream_transport(settings.upstream_stream_transport)
         had_prompt_cache_key = _prompt_cache_key_from_request_model(payload) is not None
         affinity = _sticky_key_for_responses_request(
@@ -3302,7 +3408,7 @@ class ProxyService:
                         sticky_kind=affinity.kind,
                         reallocate_sticky=affinity.reallocate_sticky,
                         sticky_max_age_seconds=affinity.max_age_seconds,
-                        prefer_earlier_reset_accounts=prefer_earlier_reset,
+                        weekly_reset_preference=weekly_reset_preference,
                         routing_strategy=routing_strategy,
                         model=payload.model,
                     )
@@ -3661,7 +3767,11 @@ class ProxyService:
                         )
                         return
                     error = _parse_openai_error(exc.payload)
-                    error_code = _normalize_error_code(error.code if error else None, error.type if error else None)
+                    error_code = _normalize_error_code(
+                        error.code if error else None,
+                        error.type if error else None,
+                        error.message if error else None,
+                    )
                     error_message = error.message if error else None
                     error_type = error.type if error else None
                     error_param = error.param if error else None
@@ -3816,6 +3926,7 @@ class ProxyService:
                 code = _normalize_error_code(
                     error.code if error else None,
                     error.type if error else None,
+                    error.message if error else None,
                 )
                 status = "error"
                 error_code = code
@@ -3886,6 +3997,7 @@ class ProxyService:
                         error_code = _normalize_error_code(
                             error.code if error else None,
                             error.type if error else None,
+                            error.message if error else None,
                         )
                         error_message = error.message if error else None
                         settlement.error = _upstream_error_from_openai(error)
@@ -3904,6 +4016,7 @@ class ProxyService:
             error_code = _normalize_error_code(
                 error.code if error else None,
                 error.type if error else None,
+                error.message if error else None,
             )
             error_message = error.message if error else None
             settlement.record_success = False
@@ -4233,7 +4346,8 @@ class ProxyService:
         sticky_kind: StickySessionKind | None = None,
         reallocate_sticky: bool = False,
         sticky_max_age_seconds: int | None = None,
-        prefer_earlier_reset_accounts: bool = False,
+        weekly_reset_preference: WeeklyResetPreference = "disabled",
+        prioritize_full_weekly_capacity: bool | None = None,
         routing_strategy: RoutingStrategy = "capacity_weighted",
         model: str | None = None,
         additional_limit_name: str | None = None,
@@ -4252,11 +4366,27 @@ class ProxyService:
                     sticky_kind=sticky_kind,
                     reallocate_sticky=reallocate_sticky,
                     sticky_max_age_seconds=sticky_max_age_seconds,
-                    prefer_earlier_reset_accounts=prefer_earlier_reset_accounts,
+                    weekly_reset_preference=weekly_reset_preference,
+                    prioritize_full_weekly_capacity=(
+                        _prioritize_full_weekly_capacity(settings)
+                        if prioritize_full_weekly_capacity is None
+                        else prioritize_full_weekly_capacity
+                    ),
                     routing_strategy=routing_strategy,
                     model=model,
                     additional_limit_name=additional_limit_name,
                     budget_threshold_pct=settings.sticky_reallocation_budget_threshold_pct,
+                    spread_new_codex_sessions=getattr(settings, "spread_new_codex_sessions", False),
+                    spread_new_codex_sessions_window_seconds=getattr(
+                        settings,
+                        "spread_new_codex_sessions_window_seconds",
+                        60,
+                    ),
+                    spread_new_codex_sessions_top_pool_size=getattr(
+                        settings,
+                        "spread_new_codex_sessions_top_pool_size",
+                        5,
+                    ),
                 )
         except TimeoutError:
             logger.warning("%s account selection exceeded request budget request_id=%s", kind.title(), request_id)
@@ -4267,6 +4397,7 @@ class ProxyService:
         code = _normalize_error_code(
             error.code if error else None,
             error.type if error else None,
+            error.message if error else None,
         )
         await self._handle_stream_error(
             account,
@@ -4280,7 +4411,7 @@ class ProxyService:
         error: UpstreamError,
         code: str,
     ) -> None:
-        if code in {"rate_limit_exceeded", "usage_limit_reached"}:
+        if code in {"rate_limit_exceeded", "usage_limit_reached", "server_is_overloaded"}:
             await self._load_balancer.mark_rate_limit(account, error)
             return
         if code in {"insufficient_quota", "usage_not_included", "quota_exceeded"}:
@@ -4570,6 +4701,19 @@ def _routing_strategy(settings: DashboardSettings) -> RoutingStrategy:
     return "capacity_weighted"
 
 
+def _weekly_reset_preference(settings: DashboardSettings) -> WeeklyResetPreference:
+    value = settings.weekly_reset_preference or "disabled"
+    if value == "earlier_reset":
+        return "earlier_reset"
+    if value == "expiring_quota_priority":
+        return "expiring_quota_priority"
+    return "disabled"
+
+
+def _prioritize_full_weekly_capacity(settings: DashboardSettings) -> bool:
+    return getattr(settings, "prioritize_full_weekly_capacity", True) is not False
+
+
 def _parse_websocket_payload(text: str) -> dict[str, JsonValue] | None:
     try:
         payload = json.loads(text)
@@ -4659,7 +4803,11 @@ def _raise_proxy_unavailable(message: str) -> NoReturn:
 
 def _is_proxy_budget_exhausted_error(exc: ProxyResponseError) -> bool:
     error = _parse_openai_error(exc.payload)
-    error_code = _normalize_error_code(error.code if error else None, error.type if error else None)
+    error_code = _normalize_error_code(
+        error.code if error else None,
+        error.type if error else None,
+        error.message if error else None,
+    )
     error_message = error.message if error else None
     return error_code == "upstream_unavailable" and error_message == "Proxy request budget exhausted"
 
@@ -5268,6 +5416,7 @@ def _log_http_bridge_event(
         "queue_full",
         "submit_on_closed",
         "send_failure",
+        "revive_stale",
         "retry_fresh_upstream",
         "retry_precreated",
         "reconnect",

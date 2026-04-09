@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import time
 from datetime import datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -14,7 +15,7 @@ from app.core.balancer import (
     select_account,
 )
 from app.core.usage.quota import apply_usage_quota
-from app.db.models import Account, AccountStatus, UsageHistory
+from app.db.models import Account, AccountStatus, StickySessionKind, UsageHistory
 from app.modules.proxy.load_balancer import RuntimeState, _state_from_account
 
 pytestmark = pytest.mark.unit
@@ -48,7 +49,7 @@ def test_select_account_prefers_earlier_secondary_reset_bucket():
             secondary_reset_at=int(now + 2 * 3600),
         ),
     ]
-    result = select_account(states, now=now, prefer_earlier_reset=True, routing_strategy="usage_weighted")
+    result = select_account(states, now=now, weekly_reset_preference="earlier_reset", routing_strategy="usage_weighted")
     assert result.account is not None
     assert result.account.account_id == "b"
 
@@ -71,7 +72,7 @@ def test_select_account_secondary_reset_is_bucketed_by_day():
             secondary_reset_at=int(now + 1 * 3600),
         ),
     ]
-    result = select_account(states, now=now, prefer_earlier_reset=True, routing_strategy="usage_weighted")
+    result = select_account(states, now=now, weekly_reset_preference="earlier_reset", routing_strategy="usage_weighted")
     assert result.account is not None
     assert result.account.account_id == "b"
 
@@ -94,7 +95,7 @@ def test_select_account_prefers_lower_secondary_used_with_same_reset_bucket():
             secondary_reset_at=int(now + 1 * 3600),
         ),
     ]
-    result = select_account(states, now=now, prefer_earlier_reset=True, routing_strategy="usage_weighted")
+    result = select_account(states, now=now, weekly_reset_preference="earlier_reset", routing_strategy="usage_weighted")
     assert result.account is not None
     assert result.account.account_id == "b"
 
@@ -117,7 +118,7 @@ def test_select_account_deprioritizes_missing_secondary_reset_at():
             secondary_reset_at=int(now + 1 * 3600),
         ),
     ]
-    result = select_account(states, now=now, prefer_earlier_reset=True, routing_strategy="usage_weighted")
+    result = select_account(states, now=now, weekly_reset_preference="earlier_reset", routing_strategy="usage_weighted")
     assert result.account is not None
     assert result.account.account_id == "b"
 
@@ -140,9 +141,136 @@ def test_select_account_ignores_reset_when_disabled():
             secondary_reset_at=int(now + 1 * 3600),
         ),
     ]
-    result = select_account(states, now=now, prefer_earlier_reset=False, routing_strategy="usage_weighted")
+    result = select_account(states, now=now, weekly_reset_preference="disabled", routing_strategy="usage_weighted")
     assert result.account is not None
     assert result.account.account_id == "a"
+
+
+def test_select_account_expiring_quota_priority_prefers_more_urgent_expiration():
+    now = time.time()
+    states = [
+        AccountState(
+            "soon-small",
+            AccountStatus.ACTIVE,
+            used_percent=95.0,
+            secondary_used_percent=95.0,
+            secondary_reset_at=int(now + 24 * 3600),
+            capacity_credits=1_000.0,
+        ),
+        AccountState(
+            "later-large",
+            AccountStatus.ACTIVE,
+            used_percent=40.0,
+            secondary_used_percent=40.0,
+            secondary_reset_at=int(now + 72 * 3600),
+            capacity_credits=1_000.0,
+        ),
+    ]
+
+    result = select_account(
+        states,
+        now=now,
+        weekly_reset_preference="expiring_quota_priority",
+        routing_strategy="usage_weighted",
+    )
+    assert result.account is not None
+    assert result.account.account_id == "soon-small"
+
+
+def test_select_account_expiring_quota_priority_prefers_more_remaining_with_same_reset():
+    now = time.time()
+    states = [
+        AccountState(
+            "more-remaining",
+            AccountStatus.ACTIVE,
+            used_percent=60.0,
+            secondary_used_percent=60.0,
+            secondary_reset_at=int(now + 8 * 3600),
+            capacity_credits=1_000.0,
+        ),
+        AccountState(
+            "less-remaining",
+            AccountStatus.ACTIVE,
+            used_percent=90.0,
+            secondary_used_percent=90.0,
+            secondary_reset_at=int(now + 8 * 3600),
+            capacity_credits=1_000.0,
+        ),
+    ]
+
+    result = select_account(
+        states,
+        now=now,
+        weekly_reset_preference="expiring_quota_priority",
+        routing_strategy="usage_weighted",
+    )
+    assert result.account is not None
+    assert result.account.account_id == "more-remaining"
+
+
+def test_select_account_prioritizes_fully_unused_weekly_accounts_by_default():
+    now = time.time()
+    states = [
+        AccountState(
+            "fully-unused",
+            AccountStatus.ACTIVE,
+            used_percent=70.0,
+            secondary_used_percent=0.0,
+            secondary_reset_at=int(now + 2 * 24 * 3600),
+            capacity_credits=100.0,
+        ),
+        AccountState(
+            "partially-used",
+            AccountStatus.ACTIVE,
+            used_percent=5.0,
+            secondary_used_percent=20.0,
+            secondary_reset_at=int(now + 2 * 3600),
+            capacity_credits=1_000.0,
+        ),
+    ]
+
+    result = select_account(
+        states,
+        now=now,
+        weekly_reset_preference="disabled",
+        routing_strategy="capacity_weighted",
+        deterministic_probe=True,
+    )
+    assert result.account is not None
+    assert result.account.account_id == "fully-unused"
+
+
+def test_select_account_can_disable_full_weekly_capacity_priority():
+    now = time.time()
+    states = [
+        AccountState(
+            "fully-unused",
+            AccountStatus.ACTIVE,
+            used_percent=70.0,
+            secondary_used_percent=0.0,
+            secondary_reset_at=int(now + 2 * 24 * 3600),
+            capacity_credits=100.0,
+        ),
+        AccountState(
+            "partially-used",
+            AccountStatus.ACTIVE,
+            used_percent=5.0,
+            secondary_used_percent=20.0,
+            secondary_reset_at=int(now + 2 * 3600),
+            capacity_credits=1_000.0,
+        ),
+    ]
+
+    result = select_account(
+        states,
+        now=now,
+        weekly_reset_preference="disabled",
+        prioritize_full_weekly_capacity=False,
+        routing_strategy="capacity_weighted",
+        deterministic_probe=True,
+    )
+    assert result.account is not None
+    assert result.account.account_id == "partially-used"
 
 
 def test_select_account_skips_rate_limited_until_reset():
@@ -716,6 +844,103 @@ async def test_load_selection_inputs_parallelizes_usage_queries():
     assert result.latest_secondary == {}
 
 
+@pytest.mark.asyncio
+async def test_select_with_stickiness_spreads_new_codex_session_across_recently_unused_pool():
+    from app.modules.proxy.load_balancer import LoadBalancer
+
+    sticky_repo = AsyncMock()
+    sticky_repo.get_account_id = AsyncMock(return_value=None)
+    sticky_repo.upsert = AsyncMock()
+
+    recent_repo = AsyncMock()
+    recent_repo.latest_account_assignments_since = AsyncMock(
+        return_value={"a": datetime(2026, 4, 9, 12, 0, 0)}
+    )
+    recent_repo.upsert = AsyncMock()
+    recent_repo.purge_before = AsyncMock()
+
+    balancer = LoadBalancer(repo_factory=AsyncMock())
+    states = [
+        AccountState("a", AccountStatus.ACTIVE, used_percent=10.0),
+        AccountState("b", AccountStatus.ACTIVE, used_percent=20.0),
+        AccountState("c", AccountStatus.ACTIVE, used_percent=30.0),
+    ]
+
+    result = await balancer._select_with_stickiness(
+        states=states,
+        account_map={"a": object(), "b": object(), "c": object()},
+        sticky_key="session-1",
+        sticky_kind=StickySessionKind.CODEX_SESSION,
+        reallocate_sticky=False,
+        sticky_max_age_seconds=None,
+        weekly_reset_preference="disabled",
+        prioritize_full_weekly_capacity=True,
+        routing_strategy="usage_weighted",
+        sticky_repo=sticky_repo,
+        recent_assignments_repo=recent_repo,
+        spread_new_codex_sessions=True,
+        spread_window_seconds=60,
+        spread_top_pool_size=2,
+    )
+
+    assert result.account is not None
+    assert result.account.account_id == "b"
+    sticky_repo.upsert.assert_awaited_once_with(
+        "session-1",
+        "b",
+        kind=StickySessionKind.CODEX_SESSION,
+    )
+    recent_repo.upsert.assert_awaited_once_with(
+        "session-1",
+        "b",
+        kind=StickySessionKind.CODEX_SESSION,
+    )
+
+
+@pytest.mark.asyncio
+async def test_select_with_stickiness_existing_codex_mapping_bypasses_spread_policy():
+    from app.modules.proxy.load_balancer import LoadBalancer
+
+    sticky_repo = AsyncMock()
+    sticky_repo.get_account_id = AsyncMock(return_value="a")
+    sticky_repo.upsert = AsyncMock()
+
+    recent_repo = AsyncMock()
+    recent_repo.latest_account_assignments_since = AsyncMock(
+        return_value={"b": datetime(2026, 4, 9, 12, 0, 0)}
+    )
+    recent_repo.upsert = AsyncMock()
+    recent_repo.purge_before = AsyncMock()
+
+    balancer = LoadBalancer(repo_factory=AsyncMock())
+    states = [
+        AccountState("a", AccountStatus.ACTIVE, used_percent=80.0),
+        AccountState("b", AccountStatus.ACTIVE, used_percent=10.0),
+    ]
+
+    result = await balancer._select_with_stickiness(
+        states=states,
+        account_map={"a": object(), "b": object()},
+        sticky_key="session-1",
+        sticky_kind=StickySessionKind.CODEX_SESSION,
+        reallocate_sticky=False,
+        sticky_max_age_seconds=None,
+        weekly_reset_preference="disabled",
+        prioritize_full_weekly_capacity=True,
+        routing_strategy="usage_weighted",
+        sticky_repo=sticky_repo,
+        recent_assignments_repo=recent_repo,
+        spread_new_codex_sessions=True,
+        spread_window_seconds=60,
+        spread_top_pool_size=2,
+    )
+
+    assert result.account is not None
+    assert result.account.account_id == "a"
+    recent_repo.latest_account_assignments_since.assert_not_awaited()
+    recent_repo.upsert.assert_not_awaited()
+
+
 def test_select_account_capacity_weighted_pro_plus_same_usage_prefers_pro_by_capacity():
     random.seed(11)
     n = 2000
@@ -975,7 +1200,7 @@ def test_select_account_capacity_weighted_prefers_earlier_reset_bucket():
         result = select_account(
             [early, late],
             now=now,
-            prefer_earlier_reset=True,
+            weekly_reset_preference="earlier_reset",
             routing_strategy="capacity_weighted",
         )
         assert result.account is not None
@@ -1019,7 +1244,8 @@ def test_select_account_capacity_weighted_prefers_capacity_within_same_reset_buc
         result = select_account(
             [pro, plus, late],
             now=now,
-            prefer_earlier_reset=True,
+            weekly_reset_preference="earlier_reset",
+            prioritize_full_weekly_capacity=False,
             routing_strategy="capacity_weighted",
         )
         assert result.account is not None
@@ -1057,7 +1283,8 @@ def test_select_account_capacity_weighted_with_prefer_deprioritizes_missing_rese
         result = select_account(
             [missing_reset, known_reset],
             now=now,
-            prefer_earlier_reset=True,
+            weekly_reset_preference="earlier_reset",
+            prioritize_full_weekly_capacity=False,
             routing_strategy="capacity_weighted",
         )
         assert result.account is not None
@@ -1099,7 +1326,8 @@ def test_select_account_capacity_weighted_with_prefer_falls_back_when_earliest_b
         result = select_account(
             [earliest_high_usage, earliest_lower_usage, later_healthy],
             now=now,
-            prefer_earlier_reset=True,
+            weekly_reset_preference="earlier_reset",
+            prioritize_full_weekly_capacity=False,
             routing_strategy="capacity_weighted",
         )
         assert result.account is not None

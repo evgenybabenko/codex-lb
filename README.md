@@ -292,6 +292,29 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
+For sequential `responses.create()` calls that rely on `previous_response_id`, persist and replay the `x-codex-turn-state` response header. The official SDK does not do that automatically, so this repo ships a small reference wrapper:
+
+```python
+from openai import OpenAI
+
+from app.core.clients.openai_turn_state import TurnStateOpenAI
+
+sdk = OpenAI(
+    base_url="http://127.0.0.1:2455/v1",
+    api_key="sk-clb-...",
+)
+client = TurnStateOpenAI(sdk)
+
+first = client.responses.create(model="gpt-5.3-codex", input="Say ok.")
+second = client.responses.create(
+    model="gpt-5.3-codex",
+    input="Repeat exactly: ok",
+    previous_response_id=first.id,
+)
+print(client.turn_state)
+print(second.output_text)
+```
+
 </details>
 
 ## API Key Authentication
@@ -331,7 +354,13 @@ helm install codex-lb oci://ghcr.io/soju06/charts/codex-lb \
 kubectl port-forward svc/codex-lb 2455:2455
 ```
 
-Open [localhost:2455](http://localhost:2455) → Add account → Done.
+Open [localhost:2455](http://localhost:2455) to verify the dashboard and API.
+
+For Kubernetes port-forward installs, do not assume the one-click browser OAuth
+flow will complete through the same service port-forward. The upstream callback
+is fixed to `http://localhost:1455/auth/callback`, so in remote or
+port-forwarded setups you should use `auth.json` import or the manual callback
+flow instead of expecting `2455` alone to finish account bootstrap.
 
 For external database, production config, ingress, observability, and more see the [Helm chart README](deploy/helm/codex-lb/README.md).
 
@@ -351,12 +380,25 @@ Typical development flow:
 
 ### Local Setup
 
+Stable local port map:
+
+| Purpose | Worktree / stack | Backend | Frontend | Notes |
+|---|---|---:|---:|---|
+| `main` runtime | `codex-lb-main/` + `docker-compose.yml` | `2455` | `5173` | Keep Codex App pointed here |
+| `develop` sandbox | `codex-lb/` + `docker-compose.sandbox.yml` | `2456` | `5174` | Use for risky UI/backend iteration |
+| bare local frontend dev | `codex-lb/frontend` | proxies to `2455` by default | `5173` | `cd frontend && bun run dev` |
+
+If you see `5174`, you are looking at the sandbox frontend, not the stable stack.
+
 ```bash
 # Docker
 cp .env.example .env.local
 # edit CODEX_LB_HOST_DATA_DIR and CODEX_LB_SANDBOX_HOST_DATA_DIR
 mkdir -p ./.local/codex-lb-data ./.local/codex-lb-sandbox-data
 docker compose watch
+
+# Sandbox Docker stack from the current develop worktree
+docker compose -f docker-compose.sandbox.yml watch
 
 # Local
 uv sync && cd frontend && bun install && cd ..

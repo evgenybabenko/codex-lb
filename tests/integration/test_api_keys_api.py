@@ -205,7 +205,7 @@ async def test_api_key_model_restriction_and_models_filter(async_client):
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -297,7 +297,7 @@ async def test_api_key_enforces_model_and_reasoning_for_responses(async_client, 
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -369,7 +369,7 @@ async def test_api_key_enforces_service_tier_for_responses(async_client, monkeyp
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -431,7 +431,7 @@ async def test_api_key_enforces_model_and_reasoning_for_compact_responses(async_
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -497,7 +497,7 @@ async def test_api_key_usage_tracking_and_request_log_link(async_client, monkeyp
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -575,7 +575,7 @@ async def test_api_key_usage_summary_cost_respects_service_tier(async_client, mo
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -646,7 +646,7 @@ async def test_api_key_usage_summary_uses_persisted_request_log_cost(async_clien
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -755,7 +755,7 @@ async def test_stream_usage_logs_actual_service_tier(async_client, monkeypatch):
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -832,7 +832,7 @@ async def test_stream_usage_logs_actual_service_tier_when_response_created_echoe
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -918,7 +918,7 @@ async def test_api_key_limit_applies_to_compact_responses(async_client, monkeypa
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -996,7 +996,7 @@ async def test_chat_completions_stream_finalizes_token_limit(async_client, monke
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1070,7 +1070,7 @@ async def test_chat_completions_stream_finalizes_cost_limit(async_client, monkey
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1152,7 +1152,7 @@ async def test_compact_cost_limit_uses_canonical_request_service_tier_when_respo
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1236,7 +1236,7 @@ async def test_compact_cost_limit_prefers_response_service_tier_over_request(
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1302,7 +1302,7 @@ async def test_v1_responses_non_stream_finalizes_cost_limit(async_client, monkey
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1373,7 +1373,7 @@ async def test_api_key_reservation_released_on_compact_upstream_failure(async_cl
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1424,7 +1424,7 @@ async def test_api_key_limit_parallel_requests_do_not_exceed_quota(async_client,
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1491,7 +1491,7 @@ async def test_api_key_limit_atomic_with_global_and_model_scope(async_client):
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1547,7 +1547,7 @@ async def test_model_scoped_limit_allows_other_models(async_client, monkeypatch)
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1611,7 +1611,7 @@ async def test_model_scoped_limit_does_not_block_v1_models(async_client):
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1654,7 +1654,7 @@ async def test_global_limit_blocks_models_and_response_routes(async_client):
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1847,7 +1847,7 @@ async def test_allowed_but_unsupported_model_is_exposed(async_client):
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1883,7 +1883,7 @@ async def test_stream_401_retry_success_finalizes_once(async_client, monkeypatch
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1952,7 +1952,7 @@ async def test_stream_no_accounts_releases_reservation(async_client, monkeypatch
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -1999,7 +1999,7 @@ async def test_compact_unexpected_exception_releases_reservation(async_client, m
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -2050,7 +2050,7 @@ async def test_stream_without_api_key_auth_skips_settlement(async_client, monkey
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": False,
         },

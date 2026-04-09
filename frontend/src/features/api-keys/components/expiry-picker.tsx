@@ -4,16 +4,9 @@ import { CalendarIcon, ChevronDown, Infinity as InfinityIcon } from "lucide-reac
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { useT } from "@/lib/i18n";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-
-const PRESETS = [
-  { label: "1 day", shortLabel: "1d", days: 1 },
-  { label: "7 days", shortLabel: "7d", days: 7 },
-  { label: "30 days", shortLabel: "30d", days: 30 },
-  { label: "90 days", shortLabel: "90d", days: 90 },
-  { label: "1 year", shortLabel: "1y", days: 365 },
-] as const;
 
 export type ExpiryPickerProps = {
   value: Date | null;
@@ -21,8 +14,16 @@ export type ExpiryPickerProps = {
 };
 
 export function ExpiryPicker({ value, onChange }: ExpiryPickerProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const presets = [
+    { label: "1 day", days: 1 },
+    { label: "7 days", days: 7 },
+    { label: "30 days", days: 30 },
+    { label: "90 days", days: 90 },
+    { label: "1 year", days: 365 },
+  ] as const;
 
   const activePresetDays = getActivePreset(value);
 
@@ -55,8 +56,8 @@ export function ExpiryPicker({ value, onChange }: ExpiryPickerProps) {
   }
 
   function getTriggerLabel(): string {
-    if (!value) return "No expiration";
-    const preset = PRESETS.find((p) => p.days === activePresetDays);
+    if (!value) return t("apiExpiryNoExpiration");
+    const preset = presets.find((p) => p.days === activePresetDays);
     if (preset) return `${preset.label} (${format(value, "yyyy-MM-dd")})`;
     return format(value, "yyyy-MM-dd");
   }
@@ -89,7 +90,7 @@ export function ExpiryPicker({ value, onChange }: ExpiryPickerProps) {
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 onClick={() => setShowCalendar(false)}
               >
-                &larr; Back to presets
+                &larr; {t("apiExpiryBackToPresets")}
               </button>
             </div>
             <Calendar
@@ -107,12 +108,12 @@ export function ExpiryPicker({ value, onChange }: ExpiryPickerProps) {
               onClick={handleNever}
             >
               <InfinityIcon className="size-4" />
-              No expiration
+              {t("apiExpiryNoExpiration")}
             </OptionItem>
 
             <div className="bg-border -mx-1 my-1 h-px" />
 
-            {PRESETS.map((preset) => (
+            {presets.map((preset) => (
               <OptionItem
                 key={preset.days}
                 active={activePresetDays === preset.days}
@@ -132,7 +133,7 @@ export function ExpiryPicker({ value, onChange }: ExpiryPickerProps) {
               onClick={() => setShowCalendar(true)}
             >
               <CalendarIcon className="size-4" />
-              Custom date...
+              {t("apiExpiryCustomDate")}
               {value && activePresetDays === null && (
                 <span className="ml-auto text-xs text-muted-foreground">
                   {format(value, "yyyy-MM-dd")}
@@ -174,7 +175,13 @@ function getActivePreset(value: Date | null): number | null {
   const now = new Date();
   const diffMs = value.getTime() - now.getTime();
   const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-  for (const preset of PRESETS) {
+  for (const preset of [
+    { days: 1 },
+    { days: 7 },
+    { days: 30 },
+    { days: 90 },
+    { days: 365 },
+  ] as const) {
     if (Math.abs(diffDays - preset.days) <= 0) {
       return preset.days;
     }

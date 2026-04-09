@@ -589,7 +589,7 @@ async def test_import_without_overwrite_keeps_same_account_identity_separate(asy
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "importWithoutOverwrite": True,
             "totpRequiredOnLogin": False,
         },
@@ -641,7 +641,7 @@ async def test_import_returns_409_when_overwrite_mode_cannot_resolve_duplicate_e
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "importWithoutOverwrite": True,
             "totpRequiredOnLogin": False,
         },
@@ -681,7 +681,7 @@ async def test_import_returns_409_when_overwrite_mode_cannot_resolve_duplicate_e
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "importWithoutOverwrite": False,
             "totpRequiredOnLogin": False,
         },

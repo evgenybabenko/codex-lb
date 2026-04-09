@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { LimitRuleCard } from "@/features/api-keys/components/limit-rule-card";
 import type { LimitRuleCreate } from "@/features/api-keys/schemas";
+import { useT } from "@/lib/i18n";
 
 export type LimitRulesEditorProps = {
   rules: LimitRuleCreate[];
@@ -22,6 +23,7 @@ function makeDefaultRule(): LimitRuleCreate {
 }
 
 export function LimitRulesEditor({ rules, onChange }: LimitRulesEditorProps) {
+  const t = useT();
   const [advanced, setAdvanced] = useState(() => {
     if (rules.length === 0) return false;
     // If any non-standard rule exists, start in advanced mode
@@ -93,9 +95,9 @@ export function LimitRulesEditor({ rules, onChange }: LimitRulesEditorProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Limits</span>
+        <span className="text-sm font-medium">{t("commonLimits")}</span>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Advanced</span>
+          <span className="text-xs text-muted-foreground">{t("commonAdvanced")}</span>
           <Switch
             checked={advanced}
             onCheckedChange={setAdvanced}
@@ -106,17 +108,17 @@ export function LimitRulesEditor({ rules, onChange }: LimitRulesEditorProps) {
       {!advanced ? (
         <div className="space-y-2">
           <div>
-            <label className="text-xs text-muted-foreground">Weekly token limit</label>
+            <label className="text-xs text-muted-foreground">{t("apiLimitEditorWeeklyToken")}</label>
             <Input
               type="number"
               min={1}
               value={weeklyTokenRule ? String(weeklyTokenRule.maxValue) : ""}
               onChange={(e) => handleBasicTokenChange(e.target.value)}
-              placeholder="No limit"
+              placeholder={t("commonNoLimit")}
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Weekly cost limit ($)</label>
+            <label className="text-xs text-muted-foreground">{t("apiLimitEditorWeeklyCost")}</label>
             <Input
               type="number"
               min={0.01}
@@ -127,7 +129,7 @@ export function LimitRulesEditor({ rules, onChange }: LimitRulesEditorProps) {
                   : ""
               }
               onChange={(e) => handleBasicCostChange(e.target.value)}
-              placeholder="No limit"
+              placeholder={t("commonNoLimit")}
             />
           </div>
         </div>
@@ -149,11 +151,11 @@ export function LimitRulesEditor({ rules, onChange }: LimitRulesEditorProps) {
             onClick={addRule}
           >
             <Plus className="mr-1 size-3.5" />
-            Add limit rule
+            {t("apiLimitEditorAddRule")}
           </Button>
           {rules.length > 1 ? (
             <p className="text-xs text-muted-foreground">
-              All rules are applied together (AND). A request is blocked if any limit is exceeded.
+              {t("apiLimitEditorAllRules")}
             </p>
           ) : null}
         </div>

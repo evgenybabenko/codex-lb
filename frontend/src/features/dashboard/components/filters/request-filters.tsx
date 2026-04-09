@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { MultiSelectFilter, type MultiSelectOption } from "@/features/dashboard/components/filters/multi-select-filter";
 import { TimeframeSelect } from "@/features/dashboard/components/filters/timeframe-select";
 import type { FilterState } from "@/features/dashboard/schemas";
+import { useT } from "@/lib/i18n";
 
 export type RequestFiltersProps = {
   filters: FilterState;
@@ -31,6 +32,7 @@ export function RequestFilters({
   onStatusChange,
   onReset,
 }: RequestFiltersProps) {
+  const t = useT();
   return (
     <div className="space-y-2 rounded-xl border bg-card p-4">
       <div className="flex items-center gap-2">
@@ -40,7 +42,7 @@ export function RequestFilters({
             value={filters.search}
             onChange={(event) => onSearchChange(event.target.value)}
             className="h-8 pl-9"
-            placeholder="Search request id, account, model, error..."
+            placeholder={t("dashboardFilterSearchPlaceholder")}
           />
         </div>
 
@@ -49,19 +51,19 @@ export function RequestFilters({
 
       <div className="flex flex-wrap items-center gap-2">
         <MultiSelectFilter
-          label="Accounts"
+          label={t("navAccounts")}
           values={filters.accountIds}
           options={accountOptions}
           onChange={onAccountChange}
         />
         <MultiSelectFilter
-          label="Models"
+          label={t("apiModels")}
           values={filters.modelOptions}
           options={modelOptions}
           onChange={onModelChange}
         />
         <MultiSelectFilter
-          label="Statuses"
+          label={t("commonStatus")}
           values={filters.statuses}
           options={statusOptions}
           onChange={onStatusChange}
@@ -69,7 +71,7 @@ export function RequestFilters({
 
         <Button type="button" variant="ghost" size="sm" onClick={onReset} className="h-8 gap-1.5 text-xs text-muted-foreground">
           <RotateCcw className="h-3 w-3" aria-hidden="true" />
-          Reset
+          {t("dashboardFilterReset")}
         </Button>
       </div>
     </div>

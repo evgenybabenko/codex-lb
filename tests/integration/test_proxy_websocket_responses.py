@@ -80,7 +80,7 @@ class _FailingSendUpstreamWebSocket(_FakeUpstreamWebSocket):
 
 def _websocket_settings(**overrides):
     values = {
-        "prefer_earlier_reset_accounts": False,
+        "weekly_reset_preference": "disabled",
         "sticky_threads_enabled": False,
         "openai_cache_affinity_max_age_seconds": 300,
         "openai_prompt_cache_key_derivation_enabled": True,
@@ -146,7 +146,7 @@ def test_backend_responses_websocket_proxies_upstream_and_persists_log(app_insta
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -158,7 +158,7 @@ def test_backend_responses_websocket_proxies_upstream_and_persists_log(app_insta
         seen["headers"] = dict(headers)
         seen["sticky_key"] = sticky_key
         seen["sticky_kind"] = sticky_kind
-        seen["prefer_earlier_reset"] = prefer_earlier_reset
+        seen["weekly_reset_preference"] = weekly_reset_preference
         seen["routing_strategy"] = routing_strategy
         seen["model"] = model
         seen["request_id"] = request_state.request_id
@@ -205,7 +205,7 @@ def test_backend_responses_websocket_proxies_upstream_and_persists_log(app_insta
     assert seen_headers["openai-beta"] == "responses_websockets=2026-02-06"
     assert seen_headers["x-codex-turn-state"] == cast(str, seen["sticky_key"])
     assert seen["sticky_kind"] == proxy_module.StickySessionKind.CODEX_SESSION
-    assert seen["prefer_earlier_reset"] is False
+    assert seen["weekly_reset_preference"] == "disabled"
     assert seen["routing_strategy"] == "usage_weighted"
     assert seen["model"] == "gpt-5.4"
     assert [json.loads(message) for message in fake_upstream.sent_text] == [
@@ -280,7 +280,7 @@ def test_backend_responses_websocket_accepts_and_reuses_generated_turn_state(app
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -292,7 +292,7 @@ def test_backend_responses_websocket_accepts_and_reuses_generated_turn_state(app
             self,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset,
+            weekly_reset_preference,
             routing_strategy,
             model,
             request_state,
@@ -385,7 +385,7 @@ def test_backend_responses_websocket_echoes_existing_turn_state_header(app_insta
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -397,7 +397,7 @@ def test_backend_responses_websocket_echoes_existing_turn_state_header(app_insta
             self,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset,
+            weekly_reset_preference,
             routing_strategy,
             model,
             request_state,
@@ -516,7 +516,7 @@ def test_v1_responses_websocket_reuses_upstream_for_sequential_requests(app_inst
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -531,7 +531,7 @@ def test_v1_responses_websocket_reuses_upstream_for_sequential_requests(app_inst
                 "sticky_kind": sticky_kind,
                 "reallocate_sticky": reallocate_sticky,
                 "sticky_max_age_seconds": sticky_max_age_seconds,
-                "prefer_earlier_reset": prefer_earlier_reset,
+                "weekly_reset_preference": weekly_reset_preference,
                 "routing_strategy": routing_strategy,
                 "model": model,
             }
@@ -649,7 +649,7 @@ def test_v1_responses_websocket_accepts_and_reuses_generated_turn_state(app_inst
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -661,7 +661,7 @@ def test_v1_responses_websocket_accepts_and_reuses_generated_turn_state(app_inst
             self,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset,
+            weekly_reset_preference,
             routing_strategy,
             model,
             request_state,
@@ -748,7 +748,7 @@ def test_v1_responses_websocket_normalizes_payload_before_forwarding(app_instanc
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -761,7 +761,7 @@ def test_v1_responses_websocket_normalizes_payload_before_forwarding(app_instanc
         seen["sticky_kind"] = sticky_kind
         seen["reallocate_sticky"] = reallocate_sticky
         seen["sticky_max_age_seconds"] = sticky_max_age_seconds
-        seen["prefer_earlier_reset"] = prefer_earlier_reset
+        seen["weekly_reset_preference"] = weekly_reset_preference
         seen["routing_strategy"] = routing_strategy
         seen["model"] = model
         return SimpleNamespace(id="acct_ws_proxy_v1"), fake_upstream
@@ -894,7 +894,7 @@ def test_backend_responses_websocket_forwards_previous_response_id(app_instance,
         *,
         sticky_key,
         sticky_kind,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -904,7 +904,7 @@ def test_backend_responses_websocket_forwards_previous_response_id(app_instance,
         reallocate_sticky=False,
         sticky_max_age_seconds=None,
     ):
-        del self, sticky_key, sticky_kind, prefer_earlier_reset, routing_strategy, model
+        del self, sticky_key, sticky_kind, weekly_reset_preference, routing_strategy, model
         del request_state, api_key, client_send_lock, websocket, reallocate_sticky, sticky_max_age_seconds
         seen["headers"] = dict(headers)
         return SimpleNamespace(id="acct_ws_prev"), fake_upstream
@@ -993,7 +993,7 @@ def test_v1_responses_websocket_forwards_previous_response_id(app_instance, monk
         *,
         sticky_key,
         sticky_kind,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -1003,7 +1003,7 @@ def test_v1_responses_websocket_forwards_previous_response_id(app_instance, monk
         reallocate_sticky=False,
         sticky_max_age_seconds=None,
     ):
-        del self, headers, sticky_key, sticky_kind, prefer_earlier_reset, routing_strategy, model
+        del self, headers, sticky_key, sticky_kind, weekly_reset_preference, routing_strategy, model
         del request_state, api_key, client_send_lock, websocket, reallocate_sticky, sticky_max_age_seconds
         seen["connected"] = True
         return SimpleNamespace(id="acct_ws_v1_prev"), fake_upstream
@@ -1122,7 +1122,7 @@ def test_backend_responses_websocket_emits_timeout_failure_for_stalled_upstream(
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -1131,7 +1131,7 @@ def test_backend_responses_websocket_emits_timeout_failure_for_stalled_upstream(
         websocket,
     ):
         del self, headers, sticky_key, sticky_kind, reallocate_sticky, sticky_max_age_seconds
-        del prefer_earlier_reset, routing_strategy, model, api_key
+        del weekly_reset_preference, routing_strategy, model, api_key
         connect_attempts["count"] += 1
         if connect_attempts["count"] == 1:
             del client_send_lock, websocket, request_state
@@ -1206,7 +1206,7 @@ def test_backend_responses_websocket_emits_terminal_failure_when_upstream_send_b
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -1221,7 +1221,7 @@ def test_backend_responses_websocket_emits_terminal_failure_when_upstream_send_b
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset,
+            weekly_reset_preference,
             routing_strategy,
             model,
             request_state,
@@ -1335,7 +1335,7 @@ def test_backend_responses_websocket_keeps_downstream_open_after_clean_upstream_
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -1350,7 +1350,7 @@ def test_backend_responses_websocket_keeps_downstream_open_after_clean_upstream_
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset,
+            weekly_reset_preference,
             routing_strategy,
             request_state,
             api_key,
@@ -1471,7 +1471,7 @@ def test_backend_responses_websocket_reconnects_after_account_health_failure(app
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -1486,7 +1486,7 @@ def test_backend_responses_websocket_reconnects_after_account_health_failure(app
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset,
+            weekly_reset_preference,
             routing_strategy,
             request_state,
             api_key,
@@ -1592,7 +1592,7 @@ def test_backend_responses_websocket_emits_no_accounts_error(app_instance, monke
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -1606,7 +1606,7 @@ def test_backend_responses_websocket_emits_no_accounts_error(app_instance, monke
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset,
+            weekly_reset_preference,
             routing_strategy,
             model,
             request_state,
@@ -1705,7 +1705,7 @@ def test_backend_responses_websocket_matches_terminal_events_by_response_id(app_
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -1720,7 +1720,7 @@ def test_backend_responses_websocket_matches_terminal_events_by_response_id(app_
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset,
+            weekly_reset_preference,
             routing_strategy,
             model,
             request_state,
@@ -1808,7 +1808,7 @@ def test_backend_responses_websocket_emits_response_failed_before_close_on_upstr
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset,
+        weekly_reset_preference,
         routing_strategy,
         model,
         request_state,
@@ -1823,7 +1823,7 @@ def test_backend_responses_websocket_emits_response_failed_before_close_on_upstr
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset,
+            weekly_reset_preference,
             routing_strategy,
             model,
             request_state,

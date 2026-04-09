@@ -30,6 +30,10 @@ See `openspec/specs/responses-api-compat/spec.md` for normative requirements.
 - Compact transport may use bounded same-contract retries only for safe pre-body transport failures and `401 -> refresh -> retry`.
 - `/v1/responses/compact` is supported only when the upstream implements it.
 - `prompt_cache_key` affinity on OpenAI-style routes is intentionally bounded by a dashboard-managed freshness window, unlike durable backend `session_id` or dashboard sticky-thread routing.
+- Durable backend `session_id` affinity now supports a separate first-assignment
+  spread policy. It can distribute newly created Codex sessions across the
+  current top-ranked accounts, but only before a sticky mapping exists for that
+  session key.
 
 ## Include Allowlist (Reference)
 
@@ -49,6 +53,10 @@ See `openspec/specs/responses-api-compat/spec.md` for normative requirements.
 - **HTTP bridge session closes or expires:** The next compatible HTTP `/v1/responses` or `/backend-api/codex/responses` request recreates a fresh upstream websocket bridge session; continuity is guaranteed only within the lifetime of one active bridged session.
 - **Multi-instance routing without bridge owner policy:** if operators do not configure a bridge ring or front-door affinity, continuity can still fragment across replicas; with a configured bridge ring, wrong-replica requests now fail closed instead of silently forking bridge state.
 - **Codex websocket reconnects:** Reconnect continuity now depends on the client replaying the accepted `x-codex-turn-state`; generated turn-state is emitted on accept for backend Codex routes and echoed back when the client already supplies one.
+- **First-assignment spread confusion:** different backend `session_id` values
+  do not automatically guarantee different accounts. They only create distinct
+  durable affinity namespaces. The optional spread policy is what makes the
+  first placement avoid recently used accounts when alternatives exist.
 - **Websocket handshake forbidden/not-found:** Auto transport now fails loud on `403` / `404` instead of silently hiding the websocket regression behind HTTP fallback.
 - **Invalid request payloads:** Return 4xx with `invalid_request_error`.
 
@@ -73,6 +81,17 @@ Non-streaming request/response:
 // response
 { "id": "resp_123", "object": "response", "status": "completed", "output": [] }
 ```
+
+Initial Codex-session spread example:
+
+1. `session_id=sub1` arrives with no existing sticky mapping and lands on top
+   candidate `account-a`.
+2. `session_id=sub2` arrives 10 seconds later with no existing mapping.
+3. If the spread window is `60s` and `account-a` is still inside the configured
+   top-ranked pool, the balancer prefers the next best recently unused account
+   instead of repeating `account-a`.
+4. A later request for `session_id=sub1` still returns to `account-a` because
+   the durable sticky mapping already exists.
 
 ## Operational Notes
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from app.core.config.settings import get_settings
 from app.core.auth.dependencies import set_dashboard_error_format, validate_dashboard_session
 from app.core.openai.model_registry import get_model_registry, is_public_model
 from app.dependencies import DashboardContext, get_dashboard_context
@@ -27,8 +28,13 @@ async def list_models() -> dict:
     models_by_slug = registry.get_models_with_fallback()
     if not models_by_slug:
         return {"models": []}
+    overrides = get_settings().model_context_window_overrides
     models = [
-        {"id": slug, "name": model.display_name or slug}
+        {
+            "id": slug,
+            "name": model.display_name or slug,
+            "contextWindow": overrides.get(slug, model.context_window),
+        }
         for slug, model in models_by_slug.items()
         if is_public_model(model, None)
     ]

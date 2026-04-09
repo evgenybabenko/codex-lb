@@ -2,11 +2,14 @@ import { Activity, AlertTriangle, Coins, DollarSign } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { buildDonutPalette } from "@/utils/colors";
+import { getMessage } from "@/lib/i18n";
 import { formatWorkspaceLabel } from "@/utils/account-identifiers";
 import {
   formatCachedTokensMeta,
   formatCompactNumber,
   formatCurrency,
+  formatDateShort,
+  formatQuotaResetLabel,
   formatRate,
   formatWindowLabel,
 } from "@/utils/formatters";
@@ -23,11 +26,14 @@ import type {
 export type RemainingItem = {
   accountId: string;
   label: string;
-  /** Suffix appended after the label (e.g. compact account ID for duplicates). Not blurred. */
-  labelSuffix: string;
+  workspaceLabel?: string;
+  resetLabel?: string | null;
+  resetAt?: string | null;
+  windowMinutes?: number | null;
   /** True when the displayed label is the account email (should be blurred in privacy mode). */
   isEmail: boolean;
   value: number;
+  capacityValue: number | null;
   remainingPercent: number | null;
   color: string;
 };
@@ -37,7 +43,7 @@ export type DashboardStat = {
   value: string;
   meta?: string;
   icon: LucideIcon;
-  trend: { value: number }[];
+  trend: { value: number; t: string; label: string }[];
   trendColor: string;
 };
 
@@ -56,7 +62,7 @@ export type DashboardView = {
 };
 
 export function buildDepletionView(depletion: Depletion | null | undefined): SafeLineView | null {
-  if (!depletion || depletion.riskLevel === "safe") return null;
+  if (!depletion) return null;
   return { safePercent: depletion.safeUsagePercent, riskLevel: depletion.riskLevel };
 }
 
@@ -71,22 +77,41 @@ function buildWindowIndex(window: UsageWindow | null): Map<string, number> {
   return index;
 }
 
+function buildWindowCapacityIndex(window: UsageWindow | null): Map<string, number> {
+  const index = new Map<string, number>();
+  if (!window) {
+    return index;
+  }
+  for (const entry of window.accounts) {
+    index.set(entry.accountId, entry.capacityCredits);
+  }
+  return index;
+}
+
 function isWeeklyOnlyAccount(account: AccountSummary): boolean {
   return account.windowMinutesPrimary == null && account.windowMinutesSecondary != null;
 }
 
-function formatWorkspaceSuffix(account: Pick<AccountSummary, "workspaceId" | "workspaceName" | "planType">): string {
+function formatRemainingWorkspaceLabel(account: Pick<AccountSummary, "workspaceId" | "workspaceName" | "planType">): string {
   const workspaceLabel = formatWorkspaceLabel(account);
-  if (workspaceLabel && workspaceLabel !== "Workspace") {
-    return ` | ${workspaceLabel}`;
+  if (workspaceLabel && workspaceLabel !== getMessage("commonWorkspace")) {
+    return workspaceLabel;
   }
   if (account.planType.trim().toLowerCase() === "free") {
-    return " | Personal";
+    return getMessage("commonPersonal");
   }
-  if (!workspaceLabel) {
-    return "";
+  return workspaceLabel || "—";
+}
+
+function formatRemainingResetLabel(resetAt: string | null | undefined): string | null {
+  const label = formatQuotaResetLabel(resetAt);
+  if (label.startsWith("in ")) {
+    return label.slice(3);
   }
-  return ` | ${workspaceLabel}`;
+  if (label.startsWith("через ")) {
+    return label.slice(6);
+  }
+  return label;
 }
 
 function accountRemainingPercent(account: AccountSummary, windowKey: "primary" | "secondary"): number | null {
@@ -139,28 +164,33 @@ export function buildRemainingItems(
   isDark = false,
 ): RemainingItem[] {
   const usageIndex = buildWindowIndex(window);
+  const capacityIndex = buildWindowCapacityIndex(window);
   const palette = buildDonutPalette(accounts.length, isDark);
+  const items: Array<RemainingItem | null> = accounts.map((account, index) => {
+    if (windowKey === "primary" && isWeeklyOnlyAccount(account)) {
+      return null;
+    }
+    const remaining = usageIndex.get(account.accountId) ?? 0;
+    const rawLabel = account.displayName || account.email || account.accountId;
+    const labelIsEmail = !!account.email && rawLabel === account.email;
+    return {
+      accountId: account.accountId,
+      label: rawLabel,
+      workspaceLabel: formatRemainingWorkspaceLabel(account),
+      resetLabel: formatRemainingResetLabel(
+        windowKey === "secondary" ? account.resetAtSecondary ?? null : account.resetAtPrimary ?? null,
+      ),
+      resetAt: windowKey === "secondary" ? account.resetAtSecondary ?? null : account.resetAtPrimary ?? null,
+      windowMinutes: windowKey === "secondary" ? account.windowMinutesSecondary ?? null : account.windowMinutesPrimary ?? null,
+      isEmail: labelIsEmail,
+      value: remaining,
+      capacityValue: capacityIndex.get(account.accountId) ?? null,
+      remainingPercent: accountRemainingPercent(account, windowKey),
+      color: palette[index % palette.length],
+    };
+  });
 
-  return accounts
-    .map((account, index) => {
-      if (windowKey === "primary" && isWeeklyOnlyAccount(account)) {
-        return null;
-      }
-      const remaining = usageIndex.get(account.accountId) ?? 0;
-      const rawLabel = account.displayName || account.email || account.accountId;
-      const labelIsEmail = !!account.email && rawLabel === account.email;
-      const labelSuffix = labelIsEmail ? formatWorkspaceSuffix(account) : "";
-      return {
-        accountId: account.accountId,
-        label: rawLabel,
-        labelSuffix,
-        isEmail: labelIsEmail,
-        value: remaining,
-        remainingPercent: accountRemainingPercent(account, windowKey),
-        color: palette[index % palette.length],
-      };
-    })
-    .filter((item): item is RemainingItem => item !== null);
+  return items.filter((item): item is RemainingItem => item !== null);
 }
 
 export function avgPerHour(cost7d: number, hours = 24 * 7): number {
@@ -172,8 +202,12 @@ export function avgPerHour(cost7d: number, hours = 24 * 7): number {
 
 const TREND_COLORS = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b"];
 
-function trendPointsToValues(points: TrendPoint[]): { value: number }[] {
-  return points.map((p) => ({ value: p.v }));
+function trendPointsToValues(points: TrendPoint[]): { value: number; t: string; label: string }[] {
+  return points.map((p) => ({
+    t: p.t,
+    value: p.v,
+    label: formatDateShort(p.t),
+  }));
 }
 
 export function buildDashboardView(
@@ -190,15 +224,17 @@ export function buildDashboardView(
 
   const stats: DashboardStat[] = [
     {
-      label: "Requests (7d)",
+      label: getMessage("dashboardStatRequests7d"),
       value: formatCompactNumber(metrics?.requests7d ?? 0),
-      meta: `Avg/day ${formatCompactNumber(Math.round((metrics?.requests7d ?? 0) / 7))}`,
+      meta: getMessage("commonAveragePerDay", {
+        value: formatCompactNumber(Math.round((metrics?.requests7d ?? 0) / 7)),
+      }),
       icon: Activity,
       trend: trendPointsToValues(trends.requests),
       trendColor: TREND_COLORS[0],
     },
     {
-      label: `Tokens (${secondaryLabel})`,
+      label: getMessage("dashboardStatTokensWindow", { window: secondaryLabel }),
       value: formatCompactNumber(metrics?.tokensSecondaryWindow ?? 0),
       meta: formatCachedTokensMeta(metrics?.tokensSecondaryWindow, metrics?.cachedTokensSecondaryWindow),
       icon: Coins,
@@ -206,19 +242,23 @@ export function buildDashboardView(
       trendColor: TREND_COLORS[1],
     },
     {
-      label: "Cost (7d)",
+      label: getMessage("dashboardStatCost7d"),
       value: formatCurrency(cost),
-      meta: `Avg/hr ${formatCurrency(avgPerHour(cost))}`,
+      meta: getMessage("commonAveragePerHour", { value: formatCurrency(avgPerHour(cost)) }),
       icon: DollarSign,
       trend: trendPointsToValues(trends.cost),
       trendColor: TREND_COLORS[2],
     },
     {
-      label: "Error rate",
+      label: getMessage("dashboardStatErrorRate"),
       value: formatRate(metrics?.errorRate7d ?? null),
       meta: metrics?.topError
-        ? `Top: ${metrics.topError}`
-        : `~${formatCompactNumber(Math.round((metrics?.errorRate7d ?? 0) * (metrics?.requests7d ?? 0)))} errors in 7d`,
+        ? getMessage("commonTop", { value: metrics.topError })
+        : getMessage("commonEstimatedErrors7d", {
+            value: formatCompactNumber(
+              Math.round((metrics?.errorRate7d ?? 0) * (metrics?.requests7d ?? 0)),
+            ),
+          }),
       icon: AlertTriangle,
       trend: trendPointsToValues(trends.errorRate),
       trendColor: TREND_COLORS[3],

@@ -63,14 +63,14 @@ async def _set_routing_settings(
     async_client,
     *,
     sticky_threads_enabled: bool,
-    prefer_earlier_reset_accounts: bool = False,
+    weekly_reset_preference: str = "disabled",
     routing_strategy: str = "usage_weighted",
 ) -> None:
     response = await async_client.put(
         "/api/settings",
         json={
             "stickyThreadsEnabled": sticky_threads_enabled,
-            "preferEarlierResetAccounts": prefer_earlier_reset_accounts,
+            "weeklyResetPreference": weekly_reset_preference,
             "routingStrategy": routing_strategy,
         },
     )
@@ -81,13 +81,13 @@ def _install_proxy_settings_cache(
     monkeypatch: pytest.MonkeyPatch,
     *,
     sticky_threads_enabled: bool,
-    prefer_earlier_reset_accounts: bool = False,
+    weekly_reset_preference: str = "disabled",
     openai_cache_affinity_max_age_seconds: int = 300,
     sticky_reallocation_budget_threshold_pct: float = 95.0,
     openai_prompt_cache_key_derivation_enabled: bool = True,
 ) -> None:
     settings = SimpleNamespace(
-        prefer_earlier_reset_accounts=prefer_earlier_reset_accounts,
+        weekly_reset_preference=weekly_reset_preference,
         sticky_threads_enabled=sticky_threads_enabled,
         openai_cache_affinity_max_age_seconds=openai_cache_affinity_max_age_seconds,
         sticky_reallocation_budget_threshold_pct=sticky_reallocation_budget_threshold_pct,

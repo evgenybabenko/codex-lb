@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { usePrivacyStore } from "@/hooks/use-privacy";
+import { useT } from "@/lib/i18n";
 
 export type MultiSelectOption = {
   value: string;
@@ -32,6 +33,7 @@ export type MultiSelectFilterProps = {
 };
 
 export function MultiSelectFilter({ label, values, options, onChange }: MultiSelectFilterProps) {
+  const t = useT();
   const blurred = usePrivacyStore((s) => s.blurred);
   const renderedOptions = useMemo<RenderedOption[]>(() => {
     const byValue = new Map<string, RenderedOption>();
@@ -65,7 +67,7 @@ export function MultiSelectFilter({ label, values, options, onChange }: MultiSel
   const summary =
     values.length === 0
       ? label
-      : values.length === 1
+        : values.length === 1
         ? (() => {
             const opt = renderedOptions.find((o) => o.value === values[0]);
             const text = opt?.label ?? values[0];
@@ -86,7 +88,7 @@ export function MultiSelectFilter({ label, values, options, onChange }: MultiSel
         <DropdownMenuLabel>{label}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {renderedOptions.length === 0 ? (
-          <p className="px-2 py-1 text-xs text-muted-foreground">No options</p>
+          <p className="px-2 py-1 text-xs text-muted-foreground">{t("commonNoOptions")}</p>
         ) : (
           renderedOptions.map((option) => (
             <DropdownMenuCheckboxItem
@@ -99,7 +101,7 @@ export function MultiSelectFilter({ label, values, options, onChange }: MultiSel
                 <span className={blurred && option.isEmail ? "truncate privacy-blur" : "truncate"}>{option.label}</span>
                 {option.isStale ? (
                   <Badge variant="secondary" className="text-[10px]">
-                    Stale
+                    {t("commonStale")}
                   </Badge>
                 ) : null}
               </span>
@@ -112,7 +114,7 @@ export function MultiSelectFilter({ label, values, options, onChange }: MultiSel
                     event.stopPropagation();
                     removeValue(option.value);
                   }}
-                  aria-label={`Remove stale ${option.label}`}
+                  aria-label={t("commonRemoveStale", { label: option.label })}
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>

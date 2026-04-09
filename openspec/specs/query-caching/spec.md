@@ -1,7 +1,9 @@
 # query-caching Specification
 
 ## Purpose
-TBD - created by syncing change query-optimization-and-caching. Update Purpose after archive.
+Define the persisted-cache and request-path selection rules that keep proxy
+reads fast, avoid redundant database work, and preserve deterministic account
+selection inputs on hot paths.
 ## Requirements
 ### Requirement: Rate limit headers cache
 The system MUST cache rate-limit header calculations on the proxy request path with a TTL aligned to the usage refresh interval, and it MUST invalidate that cache immediately when a usage refresh cycle completes.
@@ -18,14 +20,39 @@ The system MUST cache rate-limit header calculations on the proxy request path w
 - **WHEN** a proxy request arrives after the cache is empty or expired
 - **THEN** the system reads rate-limit data from the DB, computes the headers, and stores the result in the cache (SHALL)
 
-### Requirement: Settings 캐시 활용
+### Requirement: Settings cache is used on the proxy hot path
 The proxy request path MUST read dashboard settings through `SettingsCache` instead of opening a separate DB session.
 
 #### Scenario: Proxy requests use the settings cache
-- **WHEN** a stream or compact proxy request needs settings such as `sticky_threads_enabled` or `prefer_earlier_reset_accounts`
+- **WHEN** a stream or compact proxy request needs settings such as `sticky_threads_enabled`, `weekly_reset_preference`, or `prioritize_full_weekly_capacity`
 - **THEN** the system reads them from `SettingsCache` and does not create a separate DB session (SHALL)
 
-### Requirement: 계정 선택 시 중복 쿼리 제거
+### Requirement: Weekly reset preference modes influence account selection
+The request-path account selector MUST support three weekly reset preference modes: `disabled`, `earlier_reset`, and `expiring_quota_priority`.
+
+#### Scenario: Earlier-reset mode keeps reset time as the primary weekly signal
+- **WHEN** weekly reset preference is `earlier_reset`
+- **THEN** account selection prefers candidates whose weekly quota resets earlier before applying the base routing strategy within that preferred set
+
+#### Scenario: Expiring-quota mode favors valuable weekly quota that expires soon
+- **WHEN** weekly reset preference is `expiring_quota_priority`
+- **THEN** the selector computes each candidate's weekly reset priority from remaining weekly capacity and time until weekly reset
+- **AND** the time component decays exponentially with a 12-hour half-life
+- **AND** candidates with higher weekly reset priority are preferred over candidates with lower priority
+
+### Requirement: Fully unused weekly accounts can be prioritized first
+The request-path account selector MUST support a `prioritize_full_weekly_capacity` setting that is enabled by default.
+
+#### Scenario: Default setting prefers fully unused weekly accounts
+- **WHEN** `prioritize_full_weekly_capacity` is enabled
+- **AND** one or more eligible accounts still have `100%` of their weekly quota remaining
+- **THEN** account selection narrows the candidate pool to those fully unused weekly accounts before applying the base routing strategy or weekly reset preference
+
+#### Scenario: Disabled setting falls back to normal pool ordering
+- **WHEN** `prioritize_full_weekly_capacity` is disabled
+- **THEN** account selection considers fully unused and partially used weekly accounts together according to the active routing strategy and weekly reset preference
+
+### Requirement: Account selection avoids redundant latest-by-account queries
 `LoadBalancer.select_account()` MUST skip redundant `latest_by_account()` calls when no usage refresh actually ran.
 
 #### Scenario: Existing usage data is reused when nothing was refreshed
@@ -58,7 +85,7 @@ Concurrent callers that detect the same account as stale MUST share one in-fligh
 - **WHEN** a caller re-checks the persisted latest primary-window row and finds it is already within the refresh interval
 - **THEN** it skips issuing another upstream usage fetch for that account (SHALL)
 
-### Requirement: latest_by_account 쿼리 효율화
+### Requirement: latest_by_account query stays DB-efficient
 `usage_history` latest-row lookups MUST filter at the DB level instead of loading the full table into Python.
 
 #### Scenario: Only the latest row per account is returned

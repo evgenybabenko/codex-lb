@@ -37,8 +37,12 @@ describe("useSettings", () => {
 
     await result.current.updateSettingsMutation.mutateAsync({
       stickyThreadsEnabled: false,
-      preferEarlierResetAccounts: true,
+      weeklyResetPreference: "earlier_reset",
+      prioritizeFullWeeklyCapacity: false,
       openaiCacheAffinityMaxAgeSeconds: 180,
+      spreadNewCodexSessions: true,
+      spreadNewCodexSessionsWindowSeconds: 90,
+      spreadNewCodexSessionsTopPoolSize: 3,
       importWithoutOverwrite: true,
       totpRequiredOnLogin: false,
       apiKeyAuthEnabled: true,

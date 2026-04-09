@@ -40,6 +40,7 @@ FROM gcr.io/distroless/base-debian12:nonroot AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    CODEX_LB_DATABASE_MIGRATE_ON_STARTUP=false \
     PATH="/opt/venv/bin:/usr/local/bin:$PATH"
 
 WORKDIR /app

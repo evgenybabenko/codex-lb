@@ -57,7 +57,7 @@ def _repo_factory(request_logs: _RequestLogsRecorder) -> ProxyRepoFactory:
 
 def _make_proxy_settings() -> object:
     return SimpleNamespace(
-        prefer_earlier_reset_accounts=False,
+        weekly_reset_preference="disabled",
         sticky_threads_enabled=False,
         upstream_stream_transport="default",
         openai_cache_affinity_max_age_seconds=300,

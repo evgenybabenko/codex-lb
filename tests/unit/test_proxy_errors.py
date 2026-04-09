@@ -102,3 +102,24 @@ async def test_error_event_fallback_no_reason():
     event = await _error_event_from_response(resp)
 
     assert event["response"]["error"].get("message") == "Upstream error: HTTP 500"
+
+
+@pytest.mark.asyncio
+async def test_error_event_normalizes_capacity_message_to_server_is_overloaded():
+    resp = MockResponse(
+        503,
+        reason="Service Unavailable",
+        json_data={
+            "error": {
+                "message": "Selected model is at capacity. Please try a different model.",
+                "type": "server_error",
+                "code": "server_error",
+            }
+        },
+        text_data="",
+    )
+
+    event = await _error_event_from_response(resp)
+
+    assert event["response"]["error"].get("code") == "server_is_overloaded"
+    assert event["response"]["error"].get("message") == "Selected model is at capacity. Please try a different model."

@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DonutChart } from "@/components/donut-chart";
 
@@ -9,6 +9,19 @@ const BASE_ITEMS = [
 ];
 
 describe("DonutChart", () => {
+  function hasExactText(value: string) {
+    return (_content: string, node: Element | null) => node?.textContent === value;
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("renders chart title, subtitle, legend, and SVG", () => {
     const { container } = render(
       <DonutChart
@@ -23,8 +36,6 @@ describe("DonutChart", () => {
     expect(screen.getByText("Window 5h")).toBeInTheDocument();
     expect(screen.getByText("Account A")).toBeInTheDocument();
     expect(screen.getByText("Account B")).toBeInTheDocument();
-    expect(screen.getByText("Remaining")).toBeInTheDocument();
-
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
   });
@@ -43,6 +54,22 @@ describe("DonutChart", () => {
     expect(screen.getByText("A")).toBeInTheDocument();
   });
 
+  it("renders the provided centerValue instead of total capacity", () => {
+    render(
+      <DonutChart
+        title="Aggregate Remaining"
+        total={200}
+        centerValue={140}
+        items={[
+          { label: "A", value: 120, color: "#111111" },
+          { label: "B", value: 20, color: "#222222" },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText(hasExactText("140/200")).length).toBeGreaterThan(0);
+  });
+
   it("renders empty state when total is zero", () => {
     const { container } = render(
       <DonutChart title="Empty" total={0} items={[]} />,
@@ -50,7 +77,6 @@ describe("DonutChart", () => {
 
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
-    expect(screen.getByText("Remaining")).toBeInTheDocument();
   });
 
   it("renders without safeLine (no regression)", () => {
@@ -65,7 +91,7 @@ describe("DonutChart", () => {
     expect(screen.queryByTestId("safe-line-tick")).toBeNull();
   });
 
-  it("renders no tick mark when riskLevel is safe", () => {
+  it("renders a tick mark when riskLevel is safe", () => {
     render(
       <DonutChart
         title="Safe"
@@ -75,7 +101,9 @@ describe("DonutChart", () => {
       />,
     );
 
-    expect(screen.queryByTestId("safe-line-tick")).toBeNull();
+    const tick = screen.getByTestId("safe-line-tick");
+    expect(tick).toBeInTheDocument();
+    expect(tick.getAttribute("stroke-opacity")).toBe("0.7");
   });
 
   it("renders a <line> tick mark for warning riskLevel", () => {
@@ -118,5 +146,22 @@ describe("DonutChart", () => {
     );
 
     expect(screen.getByTestId("safe-line-tick")).toBeInTheDocument();
+  });
+
+  it("renders per-account remaining versus capacity and the aggregate pair", () => {
+    render(
+      <DonutChart
+        title="Window"
+        total={225}
+        centerValue={200}
+        items={[
+          { label: "Account A", value: 120, capacityValue: 225, color: "#7bb661" },
+          { label: "Account B", value: 80, capacityValue: 225, color: "#d9a441" },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText(hasExactText("200/225")).length).toBeGreaterThan(0);
+    expect(screen.getByText("120/225")).toBeInTheDocument();
   });
 });

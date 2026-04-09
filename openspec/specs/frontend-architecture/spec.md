@@ -1,7 +1,9 @@
 # frontend-architecture Specification
 
 ## Purpose
-TBD - created by archiving change frontend-react-migration. Update Purpose after archive.
+Define the contract for the standalone React dashboard frontend, including
+routing, authentication gates, dashboard UX, settings flows, request-log
+visibility, and frontend runtime conventions.
 ## Requirements
 ### Requirement: Vite project structure
 
@@ -9,16 +11,16 @@ The frontend SHALL be a standalone Vite + React + TypeScript project located at 
 
 #### Scenario: Development server
 
-- **WHEN** the developer runs `npm run dev` in `frontend/`
+- **WHEN** the developer runs `bun run dev` in `frontend/`
 - **THEN** the Vite dev server starts with HMR and proxies `/api/*`, `/v1/*`, `/backend-api/*`, `/health` requests to the FastAPI backend
 
 #### Scenario: Production build
 
-- **WHEN** the developer runs `npm run build` in `frontend/`
+- **WHEN** the developer runs `bun run build` in `frontend/`
 - **THEN** Vite outputs optimized assets (JS, CSS, index.html) to `app/static/` with content-hashed filenames
 
 ### Requirement: SPA routing
-The application SHALL use React Router v6 for client-side routing with four routes: `/dashboard`, `/accounts`, `/settings`, `/firewall`. The root path `/` SHALL redirect to `/dashboard`. FastAPI SHALL serve `index.html` for all unmatched routes as a SPA fallback.
+The application SHALL use React Router v7 for client-side routing with four routes: `/dashboard`, `/accounts`, `/settings`, `/firewall`. The root path `/` SHALL redirect to `/dashboard`. FastAPI SHALL serve `index.html` for all unmatched routes as a SPA fallback.
 
 #### Scenario: Direct navigation to route
 - **WHEN** a user navigates directly to `/firewall` in the browser
@@ -61,6 +63,32 @@ The application SHALL support light and dark themes using Tailwind CSS dark mode
 - **WHEN** the app loads with a previously saved theme preference
 - **THEN** the saved theme is applied immediately without flash
 
+### Requirement: Frontend locale preference is user-selectable
+
+The frontend SHALL let the user choose the interface language from Appearance
+settings. The selected language MUST persist locally and MUST be restored on
+later visits before the main application shell renders.
+
+#### Scenario: Operator switches interface language
+
+- **WHEN** the operator selects a supported language from Appearance settings
+- **THEN** the app shell updates its shared labels to the selected language
+- **AND** the chosen language persists for the next visit
+
+### Requirement: Dashboard request-log shell honors locale preference
+
+The dashboard shell and recent request-log section SHALL render their shared UI
+labels from the active frontend locale so operators can read the main
+navigation, dashboard headings, and request-log detail controls in the selected
+language.
+
+#### Scenario: Request-log controls use the active locale
+
+- **WHEN** the frontend locale preference is set to a supported non-default
+  language
+- **THEN** the dashboard request-log section headings, visibility controls, and
+  request detail dialog labels render in that language
+
 ### Requirement: Dashboard page
 
 The Dashboard page SHALL display: summary metric cards (requests 7d, tokens, cost, error rate), primary and secondary usage donut charts with legends, account status cards grid, and a recent requests table with filtering and pagination.
@@ -85,13 +113,18 @@ The Dashboard page SHALL display: summary metric cards (requests 7d, tokens, cos
 - **WHEN** a user changes the page size or navigates to the next page
 - **THEN** the request logs query refetches with updated offset/limit parameters and the response includes `total` count and `has_more` flag for pagination state
 
-### Requirement: Request logs display fast-mode service tier
-When a request log entry includes `service_tier`, the dashboard request-log API response MUST expose it and the recent-requests UI MUST render it alongside the model label.
+### Requirement: Request logs distinguish actual and requested service tiers
+The dashboard request-log API response MUST expose the billable tier,
+requested tier, and actual tier separately whenever a request log entry
+includes service-tier data. The recent-requests UI MUST display the actual tier
+when available and MUST show the requested tier when it differs from the
+visible actual tier.
 
-#### Scenario: Fast-mode request log entry is visible
-- **WHEN** a request log entry is recorded with `service_tier: "priority"`
-- **THEN** the `GET /api/request-logs` response includes `serviceTier: "priority"`
-- **AND** the dashboard recent-requests table renders the model label with the priority tier visible
+#### Scenario: Dashboard shows upstream-selected tier and requested tier
+- **WHEN** a request log entry is recorded with `requested_service_tier: "priority"`, `actual_service_tier: "default"`, and billable `service_tier: "default"`
+- **THEN** the `GET /api/request-logs` response includes `requestedServiceTier: "priority"`, `actualServiceTier: "default"`, and `serviceTier: "default"`
+- **AND** the dashboard renders the model label with `default`
+- **AND** the dashboard also shows that the request asked for `priority`
 
 ### Requirement: Request log transport is visible in the dashboard
 
@@ -236,7 +269,7 @@ The frontend project SHALL include a Vitest-based test infrastructure with React
 
 #### Scenario: Test runner execution
 
-- **WHEN** the developer runs `npm test` in `frontend/`
+- **WHEN** the developer runs `bun run test` in `frontend/`
 - **THEN** Vitest discovers and executes all `*.test.ts(x)` files using the Vite config (path aliases, plugins) without additional configuration
 
 #### Scenario: Component test with API data
@@ -260,7 +293,7 @@ Zod schema tests SHALL achieve 95%+ line coverage. Utility function tests SHALL 
 
 #### Scenario: Coverage gate
 
-- **WHEN** the developer runs `npm run test:coverage` in `frontend/`
+- **WHEN** the developer runs `bun run test:coverage` in `frontend/`
 - **THEN** Vitest produces a coverage report and the build fails if overall line coverage drops below 70%
 
 ### Requirement: Existing feature parity
@@ -303,4 +336,3 @@ The Accounts page MUST render known additional quotas with their mapped user-fac
 - **WHEN** an account summary contains an additional quota whose canonical key corresponds to `gpt-5.3-codex-spark`
 - **AND** the raw upstream `limitName` has changed from an earlier alias
 - **THEN** the Accounts page renders the quota label as `GPT-5.3-Codex-Spark`
-

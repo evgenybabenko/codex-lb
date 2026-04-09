@@ -293,6 +293,7 @@ export function createDashboardAuthSession(
 		passwordRequired: true,
 		totpRequiredOnLogin: false,
 		totpConfigured: true,
+		bootstrapTokenRequired: false,
 		...overrides,
 	});
 }
@@ -303,9 +304,13 @@ export function createDashboardSettings(
 	return DashboardSettingsSchema.parse({
 		stickyThreadsEnabled: true,
 		upstreamStreamTransport: "default",
-		preferEarlierResetAccounts: false,
+		weeklyResetPreference: "disabled",
+		prioritizeFullWeeklyCapacity: true,
 		routingStrategy: "usage_weighted",
 		openaiCacheAffinityMaxAgeSeconds: 300,
+		spreadNewCodexSessions: false,
+		spreadNewCodexSessionsWindowSeconds: 60,
+		spreadNewCodexSessionsTopPoolSize: 5,
 		importWithoutOverwrite: false,
 		totpRequiredOnLogin: false,
 		totpConfigured: true,

@@ -37,6 +37,19 @@ When `log_upstream_request_payload` is enabled, the system MUST log the normaliz
 - **WHEN** the proxy sends an upstream transcription request while `log_upstream_request_payload=true`
 - **THEN** the console shows non-binary metadata such as filename, content type, prompt presence, and byte length
 
+### Requirement: Optional affinity request-shape tracing
+When request-shape tracing for proxy routing is enabled, the system MUST log
+affinity decision metadata without exposing full prompt text or full cache
+keys. The trace MUST include request id, request kind, sticky kind,
+sticky-key source, whether a session header was present, whether a
+prompt-cache key was set or injected, and a stable tools hash when tools are
+present.
+
+#### Scenario: Affinity request-shape tracing is enabled
+- **WHEN** the proxy resolves routing for a Responses or compact request while request-shape tracing is enabled
+- **THEN** the console shows the chosen sticky kind, sticky-key source, prompt-cache-key presence or injection state, and tools hash
+- **AND** the console does not log raw prompt text or the full prompt-cache key unless the explicit raw-key flag is enabled
+
 ### Requirement: Proxy 4xx/5xx responses are logged with error detail
 When the proxy returns a 4xx or 5xx response for a proxied request, the system MUST log the request id, method, path, status code, error code, and error message to the console.
 

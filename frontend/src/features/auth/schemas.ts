@@ -5,6 +5,7 @@ export const AuthSessionSchema = z.object({
   passwordRequired: z.boolean(),
   totpRequiredOnLogin: z.boolean(),
   totpConfigured: z.boolean(),
+  bootstrapTokenRequired: z.boolean().default(false),
 });
 
 export const LoginRequestSchema = z.object({
@@ -13,6 +14,7 @@ export const LoginRequestSchema = z.object({
 
 export const PasswordSetupRequestSchema = z.object({
   password: z.string().min(8),
+  bootstrapToken: z.string().optional(),
 });
 
 export const PasswordChangeRequestSchema = z.object({

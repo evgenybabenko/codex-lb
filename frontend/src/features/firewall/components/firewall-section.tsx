@@ -18,14 +18,16 @@ import {
 } from "@/components/ui/table";
 import { useFirewall } from "@/features/firewall/hooks/use-firewall";
 import { useDialogState } from "@/hooks/use-dialog-state";
+import { useT } from "@/lib/i18n";
 import { getErrorMessageOrNull } from "@/utils/errors";
 import { formatTimeLong } from "@/utils/formatters";
 
-function modeLabel(mode: "allow_all" | "allowlist_active"): string {
-  return mode === "allow_all" ? "Allow all" : "Allowlist active";
+function modeLabel(mode: "allow_all" | "allowlist_active", t: ReturnType<typeof useT>): string {
+  return mode === "allow_all" ? t("firewallModeAllowAll") : t("firewallModeAllowlistActive");
 }
 
 export function FirewallSection() {
+  const t = useT();
   const [ipAddress, setIpAddress] = useState("");
   const { firewallQuery, createMutation, deleteMutation } = useFirewall();
   const deleteDialog = useDialogState<string>();
@@ -54,12 +56,12 @@ export function FirewallSection() {
   return (
     <section className="space-y-3 rounded-xl border bg-card p-5">
       <div className="flex items-center gap-2.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-          <Shield className="h-4 w-4 text-primary" aria-hidden="true" />
-        </div>
-        <div>
-          <h3 className="text-sm font-semibold">Firewall</h3>
-          <p className="text-xs text-muted-foreground">Restrict proxy APIs to allowed client IPs.</p>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+            <Shield className="h-4 w-4 text-primary" aria-hidden="true" />
+          </div>
+          <div>
+          <h3 className="text-sm font-semibold">{t("firewallTitle")}</h3>
+          <p className="text-xs text-muted-foreground">{t("firewallDescription")}</p>
         </div>
       </div>
 
@@ -67,12 +69,12 @@ export function FirewallSection() {
 
       <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Mode</span>
-          <Badge variant="outline">{modeLabel(mode)}</Badge>
+          <span className="text-xs text-muted-foreground">{t("firewallMode")}</span>
+          <Badge variant="outline">{modeLabel(mode, t)}</Badge>
         </div>
         <div className="h-4 w-px bg-border" />
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Allowed IPs</span>
+          <span className="text-xs text-muted-foreground">{t("firewallAllowedIps")}</span>
           <span className="text-sm font-medium tabular-nums">{entries.length}</span>
         </div>
       </div>
@@ -97,7 +99,7 @@ export function FirewallSection() {
           onClick={() => void handleAdd()}
           disabled={busy || !ipAddress.trim()}
         >
-          Add IP
+          {t("commonAddIp")}
         </Button>
       </div>
 
@@ -108,17 +110,17 @@ export function FirewallSection() {
       ) : entries.length === 0 ? (
         <EmptyState
           icon={Shield}
-          title="No IPs on the allowlist"
-          description="Firewall is currently in allow-all mode."
+          title={t("firewallAllowlistEmptyTitle")}
+          description={t("firewallAllowlistEmptyDescription")}
         />
       ) : (
         <div className="overflow-x-auto rounded-xl border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>IP Address</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="w-[96px] text-right">Actions</TableHead>
+                <TableHead>{t("firewallIpAddress")}</TableHead>
+                <TableHead>{t("firewallCreated")}</TableHead>
+                <TableHead className="w-[96px] text-right">{t("commonActions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -139,7 +141,7 @@ export function FirewallSection() {
                         disabled={busy}
                         onClick={() => deleteDialog.show(entry.ipAddress)}
                       >
-                        Remove
+                        {t("commonRemove")}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -152,9 +154,9 @@ export function FirewallSection() {
 
       <ConfirmDialog
         open={deleteDialog.open}
-        title="Remove IP from allowlist"
-        description={`${deleteDialog.data ?? ""} will no longer be allowed through the firewall.`}
-        confirmLabel="Remove"
+        title={t("firewallRemoveTitle")}
+        description={t("firewallRemoveDescription", { ip: deleteDialog.data ?? "" })}
+        confirmLabel={t("commonRemove")}
         onOpenChange={deleteDialog.onOpenChange}
         onConfirm={() => {
           if (!deleteDialog.data) {

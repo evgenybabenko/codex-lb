@@ -1,3 +1,5 @@
+import { getMessage } from "@/lib/i18n";
+
 export type AccountIdentityLike = {
   accountId: string;
   email: string;
@@ -55,7 +57,7 @@ export function formatWorkspaceLabel(account: Pick<AccountIdentityLike, "workspa
     return workspaceName;
   }
   if (account.workspaceId?.trim()) {
-    return "Workspace";
+    return getMessage("commonWorkspace");
   }
   return null;
 }
@@ -63,10 +65,10 @@ export function formatWorkspaceLabel(account: Pick<AccountIdentityLike, "workspa
 export function formatWorkspaceTitle(account: Pick<AccountIdentityLike, "workspaceId" | "workspaceName">): string | null {
   const workspaceName = account.workspaceName?.trim();
   if (workspaceName) {
-    return `Workspace ${workspaceName}`;
+    return `${getMessage("commonWorkspace")} ${workspaceName}`;
   }
   if (account.workspaceId?.trim()) {
-    return "Workspace";
+    return getMessage("commonWorkspace");
   }
   return null;
 }

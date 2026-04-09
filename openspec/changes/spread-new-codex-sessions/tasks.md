@@ -1,0 +1,5 @@
+- [x] 1. Add OpenSpec requirements for dashboard controls and first-assignment codex session spreading.
+- [x] 2. Add database support for spread settings and shared recent session-assignment history.
+- [x] 3. Apply the spread rule in durable `codex_session` selection without changing existing sticky-hit behavior.
+- [x] 4. Expose the new controls through settings API and dashboard routing settings UI.
+- [x] 5. Add backend and frontend regression coverage for settings persistence and first-assignment spread behavior.

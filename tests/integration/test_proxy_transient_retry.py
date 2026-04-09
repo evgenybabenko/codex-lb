@@ -87,6 +87,24 @@ def _server_error_sse_event() -> str:
     )
 
 
+def _server_overloaded_sse_event(
+    *,
+    code: str = "server_is_overloaded",
+    message: str = "Our servers are currently overloaded. Please try again later.",
+) -> str:
+    return _sse_event(
+        {
+            "type": "response.failed",
+            "response": {
+                "error": {
+                    "code": code,
+                    "message": message,
+                },
+            },
+        }
+    )
+
+
 def _success_sse_event(response_id: str = "resp_ok") -> str:
     return _sse_event(
         {
@@ -230,6 +248,32 @@ async def test_stream_server_error_succeeds_on_third_try(async_client, monkeypat
     # All 3 calls to the same account
     assert len(seen_account_ids) == 3
     assert len(set(seen_account_ids)) == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_server_is_overloaded_fails_over_to_other_account(async_client, monkeypatch):
+    await _import_account(async_client, "acc_overload_a", "overload_a@example.com")
+    await _import_account(async_client, "acc_overload_b", "overload_b@example.com")
+
+    seen_account_ids: list[str | None] = []
+
+    async def fake_stream(payload, headers, access_token, account_id, base_url=None, raise_for_status=False):
+        seen_account_ids.append(account_id)
+        if account_id == "acc_overload_a":
+            yield _server_overloaded_sse_event()
+            return
+        yield _success_sse_event()
+
+    monkeypatch.setattr(proxy_module, "core_stream_responses", fake_stream)
+
+    payload = {"model": "gpt-5.4", "instructions": "hi", "input": [], "stream": True}
+    async with async_client.stream("POST", "/backend-api/codex/responses", json=payload) as resp:
+        assert resp.status_code == 200
+        lines = [line async for line in resp.aiter_lines() if line]
+
+    events = _extract_events(lines)
+    assert [event["type"] for event in events] == ["response.completed"]
+    assert seen_account_ids == ["acc_overload_a", "acc_overload_b"]
 
 
 # ===========================================================================

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import secrets
+
 from fastapi import APIRouter, Body, Depends, Request
 from fastapi.responses import JSONResponse
 
 from app.core.auth.dependencies import set_dashboard_error_format
+from app.core.config.settings import get_settings
 from app.core.config.settings_cache import get_settings_cache
+from app.core.request_locality import request_is_local
 from app.core.exceptions import (
     DashboardAuthError,
     DashboardBadRequestError,
@@ -49,6 +53,27 @@ def _session_client_key(request: Request, *, prefix: str) -> str:
     return f"{prefix}:{request.client.host if request.client else 'unknown'}"
 
 
+def _bootstrap_token_required_for_request(*, request: Request, password_required: bool) -> bool:
+    configured = get_settings().dashboard_bootstrap_token
+    return bool(not password_required and configured and not request_is_local(request))
+
+
+def _require_remote_bootstrap_token(request: Request, payload: PasswordSetupRequest) -> None:
+    if not _bootstrap_token_required_for_request(request=request, password_required=False):
+        return
+
+    configured = get_settings().dashboard_bootstrap_token
+    assert configured is not None
+    provided = (payload.bootstrap_token or "").strip()
+    if not provided:
+        raise DashboardBadRequestError(
+            "Bootstrap token is required for remote first-time setup",
+            code="bootstrap_token_required",
+        )
+    if not secrets.compare_digest(provided, configured):
+        raise DashboardBadRequestError("Invalid bootstrap token", code="invalid_bootstrap_token")
+
+
 async def _has_active_password_session(request: Request, context: DashboardAuthContext) -> bool:
     settings = await context.repository.get_settings()
     if settings.password_hash is None:
@@ -77,7 +102,12 @@ async def get_dashboard_auth_session(
     context: DashboardAuthContext = Depends(get_dashboard_auth_context),
 ) -> DashboardAuthSessionResponse:
     session_id = request.cookies.get(DASHBOARD_SESSION_COOKIE)
-    return await context.service.get_session_state(session_id)
+    response = await context.service.get_session_state(session_id)
+    response.bootstrap_token_required = _bootstrap_token_required_for_request(
+        request=request,
+        password_required=response.password_required,
+    )
+    return response
 
 
 @router.post("/password/setup", response_model=DashboardAuthSessionResponse)
@@ -89,6 +119,9 @@ async def setup_password(
     password = payload.password.strip()
     if len(password) < 8:
         raise DashboardValidationError("Password must be at least 8 characters")
+    current = await context.repository.get_settings()
+    if current.password_hash is None:
+        _require_remote_bootstrap_token(request, payload)
     try:
         await context.service.setup_password(password)
     except PasswordAlreadyConfiguredError as exc:

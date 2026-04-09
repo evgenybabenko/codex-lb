@@ -145,6 +145,11 @@ _WEBSOCKET_HANDSHAKE_ERROR_HINTS = (
     ("quota_exceeded", "quota exceeded"),
     ("usage_limit_reached", "usage limit reached"),
     ("rate_limit_exceeded", "rate limit"),
+    ("server_is_overloaded", "selected model is at capacity"),
+    ("server_is_overloaded", "try a different model"),
+    ("server_is_overloaded", "currently overloaded"),
+    ("server_is_overloaded", "server is overloaded"),
+    ("server_is_overloaded", "servers are currently overloaded"),
 )
 
 logger = logging.getLogger(__name__)
@@ -618,15 +623,22 @@ def _maybe_log_upstream_request_complete(
     )
 
 
-def _normalize_error_code(code: str | None, error_type: str | None) -> str:
+def _normalize_error_code(code: str | None, error_type: str | None, message: str | None = None) -> str:
+    overload_code = _infer_websocket_handshake_error_code(None, message or "") if message else None
     if code:
         normalized_code = code.lower()
+        if overload_code == "server_is_overloaded" and normalized_code in {"server_error", "upstream_error"}:
+            return overload_code
         mapped = _ERROR_TYPE_CODE_MAP.get(normalized_code)
         return mapped or normalized_code
     normalized_type = error_type.lower() if error_type else None
     if normalized_type:
+        if overload_code == "server_is_overloaded" and normalized_type in {"server_error", "upstream_error"}:
+            return overload_code
         mapped = _ERROR_TYPE_CODE_MAP.get(normalized_type)
         return mapped or normalized_type
+    if overload_code is not None:
+        return overload_code
     return "upstream_error"
 
 
@@ -772,7 +784,7 @@ async def _error_event_from_response(resp: ErrorResponse) -> ResponseFailedEvent
         if error:
             payload = error.model_dump(exclude_none=True)
             event = response_failed_event(
-                _normalize_error_code(payload.get("code"), payload.get("type")),
+                _normalize_error_code(payload.get("code"), payload.get("type"), payload.get("message")),
                 payload.get("message", fallback_message),
                 error_type=payload.get("type") or "server_error",
                 response_id=get_request_id(),

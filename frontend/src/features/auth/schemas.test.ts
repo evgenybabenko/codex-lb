@@ -9,6 +9,7 @@ describe("AuthSessionSchema", () => {
       passwordRequired: true,
       totpRequiredOnLogin: false,
       totpConfigured: true,
+      bootstrapTokenRequired: false,
     });
 
     expect(parsed).toEqual({
@@ -16,7 +17,19 @@ describe("AuthSessionSchema", () => {
       passwordRequired: true,
       totpRequiredOnLogin: false,
       totpConfigured: true,
+      bootstrapTokenRequired: false,
     });
+  });
+
+  it("defaults bootstrapTokenRequired to false when omitted", () => {
+    const parsed = AuthSessionSchema.parse({
+      authenticated: true,
+      passwordRequired: false,
+      totpRequiredOnLogin: false,
+      totpConfigured: false,
+    });
+
+    expect(parsed.bootstrapTokenRequired).toBe(false);
   });
 
   it("rejects missing required fields", () => {

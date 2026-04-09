@@ -1,7 +1,8 @@
 # api-firewall Specification
 
 ## Purpose
-TBD - created by archiving change port-firewall-to-react. Update Purpose after archive.
+Define the dashboard firewall allowlist contract, including persistence,
+normalization, and request-time IP enforcement behavior.
 ## Requirements
 ### Requirement: Firewall allowlist management API
 Dashboard API MUST expose firewall allowlist management endpoints at `/api/firewall/ips` for listing, creating, and deleting allowed client IP addresses.
@@ -51,4 +52,3 @@ Firewall IP resolution MUST optionally use `X-Forwarded-For` only when proxy hea
 #### Scenario: Untrusted proxy source
 - **WHEN** source socket IP is outside trusted CIDR list
 - **THEN** firewall ignores `X-Forwarded-For` and uses socket client IP
-

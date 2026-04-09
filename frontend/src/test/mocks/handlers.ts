@@ -75,9 +75,15 @@ const SettingsPayloadSchema = z
 		upstreamStreamTransport: z
 			.enum(["default", "auto", "http", "websocket"])
 			.optional(),
-		preferEarlierResetAccounts: z.boolean().optional(),
+		weeklyResetPreference: z
+			.enum(["disabled", "earlier_reset", "expiring_quota_priority"])
+			.optional(),
+		prioritizeFullWeeklyCapacity: z.boolean().optional(),
 		routingStrategy: z.enum(["usage_weighted", "round_robin", "capacity_weighted"]).optional(),
 		openaiCacheAffinityMaxAgeSeconds: z.number().int().positive().optional(),
+		spreadNewCodexSessions: z.boolean().optional(),
+		spreadNewCodexSessionsWindowSeconds: z.number().int().positive().optional(),
+		spreadNewCodexSessionsTopPoolSize: z.number().int().positive().optional(),
 		importWithoutOverwrite: z.boolean().optional(),
 		totpRequiredOnLogin: z.boolean().optional(),
 		totpConfigured: z.boolean().optional(),

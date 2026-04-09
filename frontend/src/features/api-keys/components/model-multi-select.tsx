@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useModels } from "@/features/api-keys/hooks/use-models";
+import { useT } from "@/lib/i18n";
 
 export type ModelMultiSelectProps = {
   value: string[];
@@ -22,8 +23,9 @@ export type ModelMultiSelectProps = {
 export function ModelMultiSelect({
   value,
   onChange,
-  placeholder = "All models",
+  placeholder,
 }: ModelMultiSelectProps) {
+  const t = useT();
   const { data: models = [], isLoading } = useModels();
   const [search, setSearch] = useState("");
 
@@ -60,7 +62,9 @@ export function ModelMultiSelect({
   }, [onChange]);
 
   const label =
-    value.length === 0 ? placeholder : `${value.length} model${value.length > 1 ? "s" : ""} selected`;
+    value.length === 0
+      ? (placeholder ?? t("commonAllModels"))
+      : t("apiModelMultiSelected", { count: value.length });
 
   return (
     <div className="space-y-1.5">
@@ -72,7 +76,7 @@ export function ModelMultiSelect({
             className="w-full justify-between font-normal"
             disabled={isLoading}
           >
-            <span className="truncate text-left">{isLoading ? "Loading models..." : label}</span>
+            <span className="truncate text-left">{isLoading ? t("commonLoadingModels") : label}</span>
             <ChevronsUpDown className="ml-1 size-4 shrink-0 opacity-50" />
           </Button>
         </DropdownMenuTrigger>
@@ -81,7 +85,7 @@ export function ModelMultiSelect({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search models..."
+              placeholder={t("apiSearchModels")}
               className="h-7 text-xs"
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
@@ -93,7 +97,7 @@ export function ModelMultiSelect({
             onCheckedChange={selectAll}
             onSelect={(e) => e.preventDefault()}
           >
-            All models
+            {t("commonAllModels")}
           </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
           {filtered.map((model) => (
@@ -107,7 +111,7 @@ export function ModelMultiSelect({
             </DropdownMenuCheckboxItem>
           ))}
           {filtered.length === 0 ? (
-            <div className="px-2 py-1.5 text-xs text-muted-foreground">No models found</div>
+            <div className="px-2 py-1.5 text-xs text-muted-foreground">{t("commonNoModelsFound")}</div>
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>

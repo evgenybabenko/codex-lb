@@ -24,6 +24,8 @@ The intended port split is:
 
 - `2455` backend + `5173` frontend = stable `main`
 - `2456` backend + `5174` frontend = `develop` sandbox
+- standalone local `uv` + `bun run dev` from the current checkout also uses
+  `2455/5173` unless the developer overrides Vite or FastAPI ports manually
 
 The stable stack also publishes OAuth callback port `1455`, while the sandbox
 does not.
@@ -33,6 +35,8 @@ does not.
 - Keep Codex App pointed at the stable stack on `http://127.0.0.1:2455`.
 - Keep UI iteration and risky restarts isolated to the sandbox on
   `2456/5174`.
+- Treat `5174` as the sandbox frontend only; if you are running plain local
+  Vite from `frontend/`, that is still `5173`.
 - Use separate host data directories from `.env.local` so the main and sandbox
   stacks do not share SQLite files or encryption keys.
 - Prefer switching between worktrees by opening the corresponding directory,
@@ -60,6 +64,18 @@ Each variable should point at a developer-local directory. The path values are
 machine-specific, but the Compose files stay shared and portable because the
 actual paths live only in untracked environment config.
 
+The Routing settings page now contains two different kinds of continuity
+controls:
+
+- durable continuity controls such as sticky threads and backend session
+  affinity behavior
+- bounded freshness controls such as prompt-cache TTL and new Codex session
+  spread settings
+
+The new Codex session spread controls intentionally affect only the first
+placement of a new backend Codex session. They do not move an already pinned
+session between accounts.
+
 When the topology is healthy:
 
 - `codex-lb-main-*` containers come from the `codex-lb-main/` worktree
@@ -75,6 +91,10 @@ When the topology is healthy:
   login because both want `localhost:1455`.
 - If both stacks are started from the same worktree, `--reload` will pick up
   the same source edits and the stable/develop split stops being meaningful.
+- Operators may misread the new spread controls as a replacement for sticky
+  affinity. They are not. Spread helps diversify first placement of new
+  sessions; sticky affinity still governs follow-up requests for an existing
+  session.
 
 # Example Workflow
 

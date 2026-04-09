@@ -15,12 +15,14 @@ import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/comp
 import { Spinner } from "@/components/ui/spinner";
 import { TotpVerifyRequestSchema } from "@/features/auth/schemas";
 import { useAuthStore } from "@/features/auth/hooks/use-auth";
+import { useT } from "@/lib/i18n";
 
 export type TotpDialogProps = {
   open: boolean;
 };
 
 export function TotpDialog({ open }: TotpDialogProps) {
+  const t = useT();
   const loading = useAuthStore((state) => state.loading);
   const error = useAuthStore((state) => state.error);
   const clearError = useAuthStore((state) => state.clearError);
@@ -51,8 +53,8 @@ export function TotpDialog({ open }: TotpDialogProps) {
         onInteractOutside={(event) => event.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>Two-factor verification</DialogTitle>
-          <DialogDescription>Enter the 6-digit code from your authenticator app.</DialogDescription>
+          <DialogTitle>{t("authTotpTitle")}</DialogTitle>
+          <DialogDescription>{t("authTotpDescription")}</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -62,7 +64,7 @@ export function TotpDialog({ open }: TotpDialogProps) {
               name="code"
               render={({ field }) => (
                 <FormItem className="flex flex-col items-center gap-2">
-                  <FormLabel className="sr-only">TOTP code</FormLabel>
+                  <FormLabel className="sr-only">{t("authTotpCodeLabel")}</FormLabel>
                   <FormControl>
                     <InputOTP
                       maxLength={6}
@@ -93,7 +95,7 @@ export function TotpDialog({ open }: TotpDialogProps) {
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? <Spinner size="sm" className="mr-2" /> : null}
-              Verify
+              {t("commonVerify")}
             </Button>
           </form>
         </Form>

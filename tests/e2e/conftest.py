@@ -120,7 +120,7 @@ def enable_api_key_auth():
             "/api/settings",
             json={
                 "stickyThreadsEnabled": False,
-                "preferEarlierResetAccounts": False,
+                "weeklyResetPreference": "disabled",
                 "totpRequiredOnLogin": False,
                 "apiKeyAuthEnabled": True,
             },

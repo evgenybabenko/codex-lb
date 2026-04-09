@@ -34,14 +34,17 @@ describe("buildDepletionView", () => {
     expect(buildDepletionView(undefined)).toBeNull();
   });
 
-  it("returns null for safe risk level", () => {
+  it("returns view for safe risk level", () => {
     const depletion: Depletion = {
       risk: 0.1,
       riskLevel: "safe",
       burnRate: 0.5,
       safeUsagePercent: 90,
     };
-    expect(buildDepletionView(depletion)).toBeNull();
+    expect(buildDepletionView(depletion)).toEqual({
+      safePercent: 90,
+      riskLevel: "safe",
+    });
   });
 
   it("returns view for warning risk level", () => {
@@ -91,9 +94,11 @@ function remainingItem(overrides: Partial<RemainingItem> & Pick<RemainingItem, "
   return {
     accountId: overrides.accountId,
     label: overrides.label ?? overrides.accountId,
-    labelSuffix: overrides.labelSuffix ?? "",
+    workspaceLabel: overrides.workspaceLabel ?? "Alpha",
+    resetLabel: overrides.resetLabel ?? "4h",
     isEmail: overrides.isEmail ?? false,
     value: overrides.value ?? 100,
+    capacityValue: overrides.capacityValue ?? 200,
     remainingPercent: overrides.remainingPercent === undefined ? 80 : overrides.remainingPercent,
     color: overrides.color ?? "#aaa",
   };
@@ -225,7 +230,7 @@ describe("buildRemainingItems", () => {
     expect(items[1].label).toBe("two@example.com");
   });
 
-  it("appends workspace labels for email-based dashboard labels", () => {
+  it("stores workspace labels separately for email-based dashboard labels", () => {
     const items = buildRemainingItems(
       [
         account({
@@ -247,17 +252,17 @@ describe("buildRemainingItems", () => {
     );
 
     expect(items[0].label).toBe("dup@example.com");
-    expect(items[0].labelSuffix).toBe(" | Alpha");
+    expect(items[0].workspaceLabel).toBe("Alpha");
     expect(items[0].isEmail).toBe(true);
     expect(items[1].label).toBe("dup@example.com");
-    expect(items[1].labelSuffix).toBe(" | Beta");
+    expect(items[1].workspaceLabel).toBe("Beta");
     expect(items[1].isEmail).toBe(true);
     expect(items[2].label).toBe("unique@example.com");
-    expect(items[2].labelSuffix).toBe("");
+    expect(items[2].workspaceLabel).toBe("—");
     expect(items[2].isEmail).toBe(true);
   });
 
-  it("falls back to a personal suffix for free accounts without a workspace name", () => {
+  it("falls back to a personal workspace label for free accounts without a workspace name", () => {
     const items = buildRemainingItems(
       [
         account({ accountId: "acc-1", email: "dup@example.com", workspaceId: "ws_1", planType: "free" }),
@@ -267,7 +272,7 @@ describe("buildRemainingItems", () => {
       "primary",
     );
 
-    expect(items[0].labelSuffix).toBe(" | Personal");
-    expect(items[1].labelSuffix).toBe(" | Personal");
+    expect(items[0].workspaceLabel).toBe("Personal");
+    expect(items[1].workspaceLabel).toBe("Personal");
   });
 });

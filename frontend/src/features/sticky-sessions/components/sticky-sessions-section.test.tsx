@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -104,7 +104,10 @@ describe("StickySessionsSection", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Purge stale" }));
-    await user.click(screen.getByRole("button", { name: "Purge" }));
+    const purgeDialog = screen.getByRole("alertdialog", {
+      name: "Purge stale prompt-cache mappings",
+    });
+    await user.click(within(purgeDialog).getByRole("button", { name: "Purge stale" }));
 
     await waitFor(() => {
       expect(purgeMutation.mutateAsync).toHaveBeenCalledWith(true);

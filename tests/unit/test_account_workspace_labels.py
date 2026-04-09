@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -8,7 +9,7 @@ import app.modules.accounts.service as accounts_service_module
 import app.modules.dashboard.service as dashboard_service_module
 from app.core.crypto import TokenEncryptor
 from app.core.utils.time import utcnow
-from app.db.models import Account, AccountStatus
+from app.db.models import Account, AccountStatus, UsageHistory
 from app.modules.accounts.mappers import build_account_summaries
 from app.modules.accounts.service import AccountsService
 from app.modules.dashboard.service import DashboardService
@@ -47,6 +48,31 @@ def test_build_account_summaries_prefers_upstream_workspace_label() -> None:
     assert len(summaries) == 1
     assert summaries[0].workspace_id is None
     assert summaries[0].workspace_name == "Ve3ultra"
+
+
+def test_build_account_summaries_clears_stale_rate_limited_status_after_reset() -> None:
+    account = _make_account()
+    encryptor = TokenEncryptor()
+    account.status = AccountStatus.RATE_LIMITED
+    account.reset_at = int(time.time()) - 60
+
+    primary_usage = UsageHistory(
+        account_id=account.id,
+        used_percent=12.0,
+        reset_at=int(time.time()) - 60,
+        window_minutes=300,
+        recorded_at=utcnow(),
+    )
+
+    summaries = build_account_summaries(
+        accounts=[account],
+        primary_usage={account.id: primary_usage},
+        secondary_usage={},
+        encryptor=encryptor,
+    )
+
+    assert len(summaries) == 1
+    assert summaries[0].status == AccountStatus.ACTIVE.value
 
 
 @pytest.mark.asyncio

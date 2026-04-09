@@ -20,9 +20,12 @@ vi.mock("@/features/auth/api", () => ({
 const baseSettings = {
   stickyThreadsEnabled: true,
   upstreamStreamTransport: "default" as const,
-  preferEarlierResetAccounts: false,
+  weeklyResetPreference: "disabled" as const,
   routingStrategy: "usage_weighted" as const,
   openaiCacheAffinityMaxAgeSeconds: 300,
+  spreadNewCodexSessions: false,
+  spreadNewCodexSessionsWindowSeconds: 60,
+  spreadNewCodexSessionsTopPoolSize: 5,
   importWithoutOverwrite: false,
   totpRequiredOnLogin: false,
   totpConfigured: false,
@@ -53,7 +56,7 @@ describe("TotpSettings", () => {
       <TotpSettings settings={baseSettings} onSave={vi.fn().mockResolvedValue(undefined)} />,
     );
     expect(screen.getByRole("button", { name: "Enable TOTP" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Disable" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Disable TOTP" })).not.toBeInTheDocument();
   });
 
   it("shows disable button when configured", () => {
@@ -63,7 +66,7 @@ describe("TotpSettings", () => {
         onSave={vi.fn().mockResolvedValue(undefined)}
       />,
     );
-    expect(screen.getByRole("button", { name: "Disable" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Disable TOTP" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Enable TOTP" })).not.toBeInTheDocument();
   });
 
@@ -105,9 +108,12 @@ describe("TotpSettings", () => {
     expect(onSave).toHaveBeenCalledWith({
       stickyThreadsEnabled: true,
       upstreamStreamTransport: "default",
-      preferEarlierResetAccounts: false,
+      weeklyResetPreference: "disabled",
       routingStrategy: "usage_weighted",
       openaiCacheAffinityMaxAgeSeconds: 300,
+      spreadNewCodexSessions: false,
+      spreadNewCodexSessionsWindowSeconds: 60,
+      spreadNewCodexSessionsTopPoolSize: 5,
       importWithoutOverwrite: false,
       totpRequiredOnLogin: true,
       apiKeyAuthEnabled: true,
@@ -129,7 +135,7 @@ describe("TotpSettings", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Disable" }));
+    await user.click(screen.getByRole("button", { name: "Disable TOTP" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("TOTP code"), "654321");

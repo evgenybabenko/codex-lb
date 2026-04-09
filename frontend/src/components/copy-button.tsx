@@ -3,6 +3,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18n";
 
 export type CopyButtonProps = {
   value: string;
@@ -10,17 +11,18 @@ export type CopyButtonProps = {
   iconOnly?: boolean;
 };
 
-export function CopyButton({ value, label = "Copy", iconOnly = false }: CopyButtonProps) {
+export function CopyButton({ value, label, iconOnly = false }: CopyButtonProps) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
-      toast.success("Copied to clipboard");
+      toast.success(t("commonCopiedClipboard"));
       setTimeout(() => setCopied(false), 1200);
     } catch {
-      toast.error("Failed to copy");
+      toast.error(t("commonFailedCopy"));
     }
   };
 
@@ -30,11 +32,11 @@ export function CopyButton({ value, label = "Copy", iconOnly = false }: CopyButt
       variant="outline"
       size={iconOnly ? "icon-sm" : "sm"}
       onClick={handleCopy}
-      aria-label={copied ? `${label} Copied` : label}
-      title={copied ? "Copied" : label}
+      aria-label={copied ? `${label ?? t("commonCopy")} ${t("commonCopied")}` : label ?? t("commonCopy")}
+      title={copied ? t("commonCopied") : label ?? t("commonCopy")}
     >
       {copied ? <Check className={iconOnly ? "h-4 w-4" : "mr-2 h-4 w-4"} /> : <Copy className={iconOnly ? "h-4 w-4" : "mr-2 h-4 w-4"} />}
-      {iconOnly ? null : copied ? "Copied" : label}
+      {iconOnly ? null : copied ? t("commonCopied") : label ?? t("commonCopy")}
     </Button>
   );
 }

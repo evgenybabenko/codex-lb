@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { LoginRequestSchema } from "@/features/auth/schemas";
 import { useAuthStore } from "@/features/auth/hooks/use-auth";
+import { useT } from "@/lib/i18n";
 
 export function LoginForm() {
+  const t = useT();
   const login = useAuthStore((state) => state.login);
   const loading = useAuthStore((state) => state.loading);
   const error = useAuthStore((state) => state.error);
@@ -30,8 +32,8 @@ export function LoginForm() {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="rounded-2xl border bg-card p-6 shadow-[var(--shadow-md)]">
         <div className="space-y-1.5">
-          <h2 className="text-base font-semibold tracking-tight">Sign in</h2>
-          <p className="text-sm text-muted-foreground">Enter your admin password to continue.</p>
+          <h2 className="text-base font-semibold tracking-tight">{t("authSignInTitle")}</h2>
+          <p className="text-sm text-muted-foreground">{t("authSignInDescription")}</p>
         </div>
 
         <div className="mt-5">
@@ -40,7 +42,7 @@ export function LoginForm() {
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-xs font-medium">Password</FormLabel>
+                <FormLabel className="text-xs font-medium">{t("authPasswordLabel")}</FormLabel>
                 <div className="relative">
                   <Lock className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" aria-hidden="true" />
                   <FormControl>
@@ -48,7 +50,7 @@ export function LoginForm() {
                       {...field}
                       type="password"
                       autoComplete="current-password"
-                      placeholder="Enter password"
+                      placeholder={t("authPasswordPlaceholder")}
                       disabled={loading}
                       className="pl-9"
                     />
@@ -64,7 +66,7 @@ export function LoginForm() {
 
         <Button type="submit" className="press-scale mt-5 w-full" disabled={loading}>
           {loading ? <Spinner size="sm" className="mr-2" /> : null}
-          Sign In
+          {t("authSignInButton")}
         </Button>
       </form>
     </Form>

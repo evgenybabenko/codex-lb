@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RESET_ERROR_LABEL } from "@/utils/constants";
 import {
   formatAccessTokenLabel,
+  formatAbsoluteQuotaPair,
   formatCachedTokensMeta,
+  formatCompactMetricNumber,
   formatCompactNumber,
   formatCountdown,
   formatCurrency,
@@ -55,6 +57,9 @@ describe("formatters", () => {
   it("formats number-like values", () => {
     expect(formatNumber(1200)).toBe("1,200");
     expect(formatCompactNumber(1200)).toMatch(/K$/);
+    expect(formatCompactMetricNumber(7560)).toBe("7.56K");
+    expect(formatCompactMetricNumber(55.25)).toBe("55.25");
+    expect(formatAbsoluteQuotaPair(200, 225)).toBe("200/225");
     expect(formatCurrency(12)).toMatch(/^\$/);
     expect(formatNumber("abc")).toBe("--");
   });

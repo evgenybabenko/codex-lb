@@ -28,6 +28,7 @@ class DepletionMetrics:
     safe_usage_percent: float  # budget line position
     projected_exhaustion_at: datetime | None
     seconds_until_exhaustion: float | None
+    capacity_credits: float | None = None
 
 
 @dataclass
@@ -46,6 +47,8 @@ def compute_depletion_for_account(
     window: str,
     history: list,  # list of objects with: used_percent, recorded_at, reset_at, window_minutes
     now: datetime | None = None,
+    *,
+    capacity_credits: float | None = None,
 ) -> DepletionMetrics | None:
     """
     Compute depletion metrics for a single account using EWMA.
@@ -122,6 +125,7 @@ def compute_depletion_for_account(
         safe_usage_percent=safe_pct,
         projected_exhaustion_at=projected_exhaustion_at,
         seconds_until_exhaustion=seconds_until_exhaustion,
+        capacity_credits=capacity_credits,
     )
 
 
@@ -129,24 +133,44 @@ def compute_aggregate_depletion(
     per_account_metrics: Sequence[DepletionMetrics | None],
 ) -> AggregateDepletionMetrics | None:
     """
-    Aggregate depletion metrics across accounts using max(risk).
+    Aggregate depletion metrics across accounts using capacity-weighted averages.
     Returns None if no valid metrics.
     """
     valid = [m for m in per_account_metrics if m is not None]
     if not valid:
         return None
 
-    # Use all fields from the worst-case account so that risk, safe-line,
-    # burn rate, and exhaustion ETA are internally consistent.
-    worst = max(valid, key=lambda m: m.risk)
+    weights = [m.capacity_credits if m.capacity_credits and m.capacity_credits > 0 else 1.0 for m in valid]
+    total_weight = sum(weights)
+
+    if total_weight <= 0:
+        return None
+
+    risk = sum(metric.risk * weight for metric, weight in zip(valid, weights, strict=False)) / total_weight
+    burn_rate = sum(metric.burn_rate * weight for metric, weight in zip(valid, weights, strict=False)) / total_weight
+    safe_usage_percent = (
+        sum(metric.safe_usage_percent * weight for metric, weight in zip(valid, weights, strict=False)) / total_weight
+    )
+    risk_level = classify_risk(risk)
+
+    exhaustion_candidates = [
+        (metric.seconds_until_exhaustion, metric.projected_exhaustion_at)
+        for metric in valid
+        if metric.seconds_until_exhaustion is not None and metric.projected_exhaustion_at is not None
+    ]
+    if exhaustion_candidates:
+        seconds_until_exhaustion, projected_exhaustion_at = min(exhaustion_candidates, key=lambda item: item[0])
+    else:
+        seconds_until_exhaustion = None
+        projected_exhaustion_at = None
 
     return AggregateDepletionMetrics(
-        risk=worst.risk,
-        risk_level=worst.risk_level,
-        burn_rate=worst.burn_rate,
-        safe_usage_percent=worst.safe_usage_percent,
-        projected_exhaustion_at=worst.projected_exhaustion_at,
-        seconds_until_exhaustion=worst.seconds_until_exhaustion,
+        risk=risk,
+        risk_level=risk_level,
+        burn_rate=burn_rate,
+        safe_usage_percent=safe_usage_percent,
+        projected_exhaustion_at=projected_exhaustion_at,
+        seconds_until_exhaustion=seconds_until_exhaustion,
     )
 
 

@@ -87,7 +87,7 @@ describe("api keys flow integration", () => {
     const readOnlyRow = getParentRow(screen.getByText("Read only key"));
     expect(within(readOnlyRow).getByText("sk-second")).toBeInTheDocument();
     expect(within(readOnlyRow).getByText("gpt-4o-mini")).toBeInTheDocument();
-    expect(within(readOnlyRow).getByText("No Usage")).toBeInTheDocument();
+    expect(within(readOnlyRow).getByText("No usage recorded")).toBeInTheDocument();
     expect(within(readOnlyRow).getByText("Never")).toBeInTheDocument();
     expect(within(readOnlyRow).getByText("Disabled")).toBeInTheDocument();
   });

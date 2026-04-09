@@ -253,7 +253,7 @@ async def test_transcription_routes_require_api_key_when_enabled(async_client, e
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -277,7 +277,7 @@ async def test_transcription_model_restriction_uses_fixed_model(async_client, en
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },
@@ -310,7 +310,7 @@ async def test_transcription_model_scoped_limit_applies(async_client):
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },

@@ -1,19 +1,15 @@
-import { Eye, EyeOff, LogOut, Menu } from "lucide-react";
+import { Eye, EyeOff, LogOut, Menu, Monitor, Moon, RefreshCw, Sun } from "lucide-react";
 import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { CodexLogo } from "@/components/brand/codex-logo";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { usePrivacyStore } from "@/hooks/use-privacy";
+import { useThemeStore, type ThemePreference } from "@/hooks/use-theme";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-
-const NAV_ITEMS = [
-  { to: "/dashboard", label: "Dashboard" },
-  { to: "/accounts", label: "Accounts" },
-  { to: "/apis", label: "APIs" },
-  { to: "/settings", label: "Settings" },
-] as const;
 
 export type AppHeaderProps = {
   onLogout: () => void;
@@ -26,10 +22,27 @@ export function AppHeader({
   showLogout = true,
   className,
 }: AppHeaderProps) {
+  const location = useLocation();
+  const queryClient = useQueryClient();
   const [mobileOpen, setMobileOpen] = useState(false);
   const blurred = usePrivacyStore((s) => s.blurred);
   const togglePrivacy = usePrivacyStore((s) => s.toggle);
+  const themePreference = useThemeStore((s) => s.preference);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const t = useT();
+  const isDashboard = location.pathname === "/dashboard";
   const PrivacyIcon = blurred ? EyeOff : Eye;
+  const themeOptions: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
+    { value: "light", label: t("themeLight"), icon: Sun },
+    { value: "dark", label: t("themeDark"), icon: Moon },
+    { value: "auto", label: t("themeSystem"), icon: Monitor },
+  ];
+  const navItems = [
+    { to: "/dashboard", label: t("navDashboard") },
+    { to: "/accounts", label: t("navAccounts") },
+    { to: "/apis", label: t("navApis") },
+    { to: "/settings", label: t("navSettings") },
+  ] as const;
 
   return (
     <header
@@ -51,7 +64,7 @@ export function AppHeader({
 
         {/* Desktop nav pills */}
         <nav className="hidden items-center rounded-lg border border-border/50 bg-muted/40 p-0.5 sm:flex">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -71,12 +84,45 @@ export function AppHeader({
 
         {/* Actions */}
         <div className="flex flex-1 items-center justify-end gap-1.5">
+          {isDashboard ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+              }}
+              aria-label={t("dashboardRefresh")}
+              className="hidden h-8 w-8 rounded-lg border border-border/50 bg-transparent p-0 text-muted-foreground transition-colors duration-200 hover:text-foreground sm:inline-flex"
+            >
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          ) : null}
+          <div className="hidden items-center gap-1 rounded-lg border border-border/50 bg-muted/40 p-0.5 sm:flex">
+            {themeOptions.map(({ value, label, icon: Icon }) => (
+              <Button
+                key={value}
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setTheme(value)}
+                aria-label={label}
+                aria-pressed={themePreference === value}
+                className={cn(
+                  "h-8 w-8 rounded-md p-0 text-muted-foreground transition-colors duration-200 hover:text-foreground",
+                  themePreference === value && "bg-background text-foreground shadow-[var(--shadow-xs)]",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+              </Button>
+            ))}
+          </div>
           <Button
             type="button"
             size="sm"
             variant="ghost"
             onClick={togglePrivacy}
-            aria-label={blurred ? "Show emails" : "Hide emails"}
+            aria-label={blurred ? t("headerShowEmails") : t("headerHideEmails")}
             className="press-scale hidden h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground sm:inline-flex"
           >
             <PrivacyIcon className="h-3.5 w-3.5" aria-hidden="true" />
@@ -90,14 +136,20 @@ export function AppHeader({
               className="press-scale hidden h-8 gap-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground sm:inline-flex"
             >
               <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-              Logout
+              {t("headerLogout")}
             </Button>
           )}
 
           {/* Mobile menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
-              <Button type="button" size="icon" variant="ghost" aria-label="Open menu" className="h-8 w-8 rounded-lg sm:hidden">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label={t("headerOpenMenu")}
+                className="h-8 w-8 rounded-lg sm:hidden"
+              >
                 <Menu className="h-4 w-4" />
               </Button>
             </SheetTrigger>
@@ -111,7 +163,7 @@ export function AppHeader({
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-0.5 px-4 pt-2">
-                {NAV_ITEMS.map((item) => (
+                {navItems.map((item) => (
                   <NavLink key={item.to} to={item.to} onClick={() => setMobileOpen(false)}>
                     {({ isActive }) => (
                       <span
@@ -128,13 +180,53 @@ export function AppHeader({
                   </NavLink>
                 ))}
                 <div className="my-2 h-px bg-border" />
+                {isDashboard ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+                    }}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                    {t("dashboardRefresh")}
+                  </button>
+                ) : null}
+                {isDashboard ? <div className="my-2 h-px bg-border" /> : null}
+                <div className="px-3 py-2">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {t("appearanceThemeLabel")}
+                  </p>
+                  <div className="flex items-center gap-1 rounded-lg border border-border/50 bg-muted/40 p-0.5">
+                    {themeOptions.map(({ value, label, icon: Icon }) => (
+                      <Button
+                        key={value}
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setTheme(value)}
+                        aria-label={label}
+                        aria-pressed={themePreference === value}
+                        className={cn(
+                          "h-8 w-8 rounded-md p-0 text-muted-foreground transition-colors duration-200 hover:text-foreground",
+                          themePreference === value &&
+                            "bg-background text-foreground shadow-[var(--shadow-xs)]",
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="my-2 h-px bg-border" />
                 <button
                   type="button"
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   onClick={togglePrivacy}
                 >
                   <PrivacyIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                  {blurred ? "Show Emails" : "Hide Emails"}
+                  {blurred ? t("headerShowEmails") : t("headerHideEmails")}
                 </button>
                 {showLogout && (
                   <button
@@ -144,9 +236,9 @@ export function AppHeader({
                       setMobileOpen(false);
                       onLogout();
                     }}
-                  >
-                    <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-                    Logout
+                    >
+                      <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+                    {t("headerLogout")}
                   </button>
                 )}
               </nav>

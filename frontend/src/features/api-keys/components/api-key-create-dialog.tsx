@@ -18,6 +18,7 @@ import { ExpiryPicker } from "@/features/api-keys/components/expiry-picker";
 import { LimitRulesEditor } from "@/features/api-keys/components/limit-rules-editor";
 import { ModelMultiSelect } from "@/features/api-keys/components/model-multi-select";
 import type { ApiKeyCreateRequest, LimitRuleCreate, ServiceTierType } from "@/features/api-keys/schemas";
+import { useT } from "@/lib/i18n";
 import {
   Select,
   SelectContent,
@@ -40,6 +41,7 @@ export type ApiKeyCreateDialogProps = {
 };
 
 export function ApiKeyCreateDialog({ open, busy, onOpenChange, onSubmit }: ApiKeyCreateDialogProps) {
+  const t = useT();
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { name: "" },
@@ -82,8 +84,8 @@ export function ApiKeyCreateDialog({ open, busy, onOpenChange, onSubmit }: ApiKe
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Create API key</DialogTitle>
-          <DialogDescription>Set restrictions and expiration for this key.</DialogDescription>
+          <DialogTitle>{t("apiCreateDialogTitle")}</DialogTitle>
+          <DialogDescription>{t("apiCreateDialogDescription")}</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -91,14 +93,14 @@ export function ApiKeyCreateDialog({ open, busy, onOpenChange, onSubmit }: ApiKe
             <div className="grid gap-x-6 sm:grid-cols-2">
               {/* Left column — General */}
               <div className="max-h-[55vh] space-y-3 overflow-y-auto overscroll-contain pl-1 pr-2">
-                <h4 className="sticky top-0 bg-background pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">General</h4>
+                <h4 className="sticky top-0 bg-background pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("commonGeneral")}</h4>
 
                 <FormField
                   control={form.control}
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Name</FormLabel>
+                      <FormLabel>{t("commonName")}</FormLabel>
                       <FormControl>
                         <Input {...field} autoComplete="off" />
                       </FormControl>
@@ -108,12 +110,12 @@ export function ApiKeyCreateDialog({ open, busy, onOpenChange, onSubmit }: ApiKe
                 />
 
                 <div className="space-y-1">
-                  <label className="text-sm font-medium">Allowed models</label>
+                  <label className="text-sm font-medium">{t("apiFormAllowedModels")}</label>
                   <ModelMultiSelect value={selectedModels} onChange={setSelectedModels} />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-sm font-medium">Enforced model</label>
+                  <label className="text-sm font-medium">{t("apiFormEnforcedModel")}</label>
                   <Input
                     value={enforcedModel}
                     onChange={(e) => setEnforcedModel(e.target.value)}
@@ -123,54 +125,54 @@ export function ApiKeyCreateDialog({ open, busy, onOpenChange, onSubmit }: ApiKe
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-sm font-medium">Enforced reasoning</label>
+                  <label className="text-sm font-medium">{t("apiFormEnforcedReasoning")}</label>
                   <Select value={enforcedReasoningEffort} onValueChange={setEnforcedReasoningEffort}>
                     <SelectTrigger>
-                      <SelectValue placeholder="None" />
+                      <SelectValue placeholder={t("apiReasoningNone")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      <SelectItem value="minimal">Minimal</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="xhigh">XHigh</SelectItem>
+                      <SelectItem value="none">{t("apiReasoningNone")}</SelectItem>
+                      <SelectItem value="minimal">{t("apiReasoningMinimal")}</SelectItem>
+                      <SelectItem value="low">{t("apiReasoningLow")}</SelectItem>
+                      <SelectItem value="medium">{t("apiReasoningMedium")}</SelectItem>
+                      <SelectItem value="high">{t("apiReasoningHigh")}</SelectItem>
+                      <SelectItem value="xhigh">{t("apiReasoningXHigh")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-sm font-medium">Enforced service tier</label>
+                  <label className="text-sm font-medium">{t("apiFormEnforcedServiceTier")}</label>
                   <Select value={enforcedServiceTier} onValueChange={setEnforcedServiceTier}>
                     <SelectTrigger>
-                      <SelectValue placeholder="None" />
+                      <SelectValue placeholder={t("apiReasoningNone")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      <SelectItem value="auto">Auto</SelectItem>
-                      <SelectItem value="default">Default</SelectItem>
-                      <SelectItem value="priority">Priority</SelectItem>
-                      <SelectItem value="flex">Flex</SelectItem>
+                      <SelectItem value="none">{t("apiReasoningNone")}</SelectItem>
+                      <SelectItem value="auto">{t("apiServiceTierAuto")}</SelectItem>
+                      <SelectItem value="default">{t("apiServiceTierDefault")}</SelectItem>
+                      <SelectItem value="priority">{t("apiServiceTierPriority")}</SelectItem>
+                      <SelectItem value="flex">{t("apiServiceTierFlex")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-sm font-medium">Expiry</label>
+                  <label className="text-sm font-medium">{t("apiFormExpiry")}</label>
                   <ExpiryPicker value={expiresAt} onChange={setExpiresAt} />
                 </div>
               </div>
 
               {/* Right column — Limits */}
               <div className="max-h-[55vh] space-y-3 overflow-y-auto overscroll-contain pl-1 pr-2 max-sm:mt-3 max-sm:border-t max-sm:pt-3">
-                <h4 className="sticky top-0 bg-background pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Limits</h4>
+                <h4 className="sticky top-0 bg-background pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("commonLimits")}</h4>
                 <LimitRulesEditor rules={limitRules} onChange={setLimitRules} />
               </div>
             </div>
 
             <DialogFooter className="mt-4">
               <Button type="submit" disabled={busy || form.formState.isSubmitting}>
-                Create
+                {t("commonCreate")}
               </Button>
             </DialogFooter>
           </form>

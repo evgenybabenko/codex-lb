@@ -151,7 +151,7 @@ async def test_prompt_cache_reallocates_when_usage_exceeds_configured_budget_thr
         json={
             "stickyThreadsEnabled": False,
             "stickyReallocationBudgetThresholdPct": 80.0,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "routingStrategy": "usage_weighted",
         },
     )

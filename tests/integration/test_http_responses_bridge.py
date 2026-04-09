@@ -128,12 +128,12 @@ def _install_bridge_settings_with_limits(
     codex_idle_ttl_seconds: float = 900.0,
     prompt_cache_idle_ttl_seconds: float = 3600.0,
     codex_prewarm_enabled: bool = False,
-    prefer_earlier_reset_accounts: bool = False,
+    weekly_reset_preference: str = "disabled",
     instance_id: str = "instance-a",
     instance_ring: list[str] | None = None,
 ) -> None:
     settings = SimpleNamespace(
-        prefer_earlier_reset_accounts=prefer_earlier_reset_accounts,
+        weekly_reset_preference=weekly_reset_preference,
         sticky_threads_enabled=False,
         openai_cache_affinity_max_age_seconds=300,
         openai_prompt_cache_key_derivation_enabled=True,
@@ -403,6 +403,12 @@ class _TurnStateBridgeUpstreamWebSocket(_FakeBridgeUpstreamWebSocket):
         return None
 
 
+class _ClosingTurnStateBridgeUpstreamWebSocket(_TurnStateBridgeUpstreamWebSocket):
+    async def send_text(self, text: str) -> None:
+        await super().send_text(text)
+        await self._messages.put(_FakeUpstreamMessage("close", close_code=1000))
+
+
 @pytest.mark.asyncio
 async def test_v1_responses_http_bridge_codex_session_uses_extended_idle_ttl(async_client, app_instance, monkeypatch):
     _install_bridge_settings_with_limits(monkeypatch, enabled=True, codex_idle_ttl_seconds=600.0)
@@ -421,7 +427,7 @@ async def test_v1_responses_http_bridge_codex_session_uses_extended_idle_ttl(asy
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -436,7 +442,7 @@ async def test_v1_responses_http_bridge_codex_session_uses_extended_idle_ttl(asy
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -509,17 +515,17 @@ async def test_v1_responses_http_bridge_codex_session_uses_extended_idle_ttl(asy
 
 
 @pytest.mark.asyncio
-async def test_v1_responses_http_bridge_creation_honors_prefer_earlier_reset(async_client, app_instance, monkeypatch):
-    _install_bridge_settings_with_limits(monkeypatch, enabled=True, prefer_earlier_reset_accounts=True)
+async def test_v1_responses_http_bridge_creation_honors_weekly_reset_preference(async_client, app_instance, monkeypatch):
+    _install_bridge_settings_with_limits(monkeypatch, enabled=True, weekly_reset_preference="earlier_reset")
     account_id = await _import_account(
         async_client,
-        "acc_http_bridge_prefer_earlier_reset",
+        "acc_http_bridge_weekly_reset_preference",
         "http-bridge-prefer-earlier-reset@example.com",
     )
     account = await _get_account(account_id)
     service = get_proxy_service_for_app(app_instance)
     fake_upstream = _FakeBridgeUpstreamWebSocket()
-    select_calls: list[bool] = []
+    select_calls: list[str] = []
 
     async def fake_select_account_with_budget(
         self,
@@ -531,7 +537,7 @@ async def test_v1_responses_http_bridge_creation_honors_prefer_earlier_reset(asy
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -551,7 +557,7 @@ async def test_v1_responses_http_bridge_creation_honors_prefer_earlier_reset(asy
             exclude_account_ids,
             additional_limit_name,
         )
-        select_calls.append(prefer_earlier_reset_accounts)
+        select_calls.append(weekly_reset_preference)
         return AccountSelection(account=account, error_message=None, error_code=None)
 
     async def fake_ensure_fresh_with_budget(self, target, *, force=False, timeout_seconds):
@@ -575,7 +581,7 @@ async def test_v1_responses_http_bridge_creation_honors_prefer_earlier_reset(asy
             "model": "gpt-5.4",
             "instructions": "",
             "input": "hello",
-            "prompt_cache_key": "bridge_prefer_earlier_reset",
+            "prompt_cache_key": "bridge_weekly_reset_preference",
         }
     )
     affinity = proxy_module._sticky_key_for_responses_request(
@@ -591,7 +597,7 @@ async def test_v1_responses_http_bridge_creation_honors_prefer_earlier_reset(asy
         headers={},
         affinity=affinity,
         api_key=None,
-        request_id="req_bridge_prefer_earlier_reset",
+        request_id="req_bridge_weekly_reset_preference",
     )
 
     session = await service._get_or_create_http_bridge_session(
@@ -604,7 +610,7 @@ async def test_v1_responses_http_bridge_creation_honors_prefer_earlier_reset(asy
         max_sessions=8,
     )
 
-    assert select_calls == [True]
+    assert select_calls == ["earlier_reset"]
     await service._close_http_bridge_session(session)
 
 
@@ -630,7 +636,7 @@ async def test_v1_responses_http_bridge_codex_session_prewarms_first_request(asy
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -645,7 +651,7 @@ async def test_v1_responses_http_bridge_codex_session_prewarms_first_request(asy
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -706,7 +712,7 @@ async def test_v1_responses_http_bridge_codex_session_does_not_prewarm_by_defaul
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -721,7 +727,7 @@ async def test_v1_responses_http_bridge_codex_session_does_not_prewarm_by_defaul
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -790,7 +796,7 @@ async def test_v1_responses_http_bridge_non_owner_instance_falls_back_to_local_s
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -805,7 +811,7 @@ async def test_v1_responses_http_bridge_non_owner_instance_falls_back_to_local_s
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -878,42 +884,115 @@ async def test_v1_responses_http_bridge_non_owner_instance_falls_back_to_local_s
 
 
 @pytest.mark.asyncio
-async def test_v1_responses_http_bridge_missing_turn_state_alias_with_previous_response_id_fails_closed(
+async def test_v1_responses_http_bridge_recreates_missing_turn_state_alias_for_previous_response_id(
+    async_client,
     app_instance,
     monkeypatch,
 ):
     _install_bridge_settings_with_limits(monkeypatch, enabled=True)
+    account_id = await _import_account(
+        async_client,
+        "acc_http_bridge_turn_state_recreate",
+        "http-bridge-turn-state-recreate@example.com",
+    )
+    account = await _get_account(account_id)
     service = get_proxy_service_for_app(app_instance)
     service._http_bridge_sessions.clear()
     service._http_bridge_inflight_sessions.clear()
     service._http_bridge_turn_state_index.clear()
+    connect_headers_seen: list[dict[str, str]] = []
+    upstreams = [
+        _TurnStateBridgeUpstreamWebSocket("upstream_turn_state_1"),
+        _TurnStateBridgeUpstreamWebSocket("upstream_turn_state_2"),
+    ]
 
-    with pytest.raises(proxy_module.ProxyResponseError) as exc_info:
-        await service._get_or_create_http_bridge_session(
-            proxy_module._HTTPBridgeSessionKey("turn_state_header", "http_turn_missing_alias", None),
-            headers={"x-codex-turn-state": "http_turn_missing_alias"},
-            affinity=proxy_module._AffinityPolicy(
-                key="http_turn_missing_alias",
-                kind=proxy_module.StickySessionKind.CODEX_SESSION,
-            ),
-            api_key=None,
-            request_model="gpt-5.1",
-            idle_ttl_seconds=120.0,
-            max_sessions=128,
-            previous_response_id="resp_missing_alias",
+    async def fake_select_account_with_budget(
+        self,
+        deadline,
+        *,
+        request_id,
+        kind,
+        sticky_key,
+        sticky_kind,
+        reallocate_sticky,
+        sticky_max_age_seconds,
+        weekly_reset_preference,
+        routing_strategy,
+        model,
+        exclude_account_ids=None,
+        additional_limit_name=None,
+    ):
+        del (
+            self,
+            deadline,
+            request_id,
+            kind,
+            sticky_key,
+            sticky_kind,
+            reallocate_sticky,
+            sticky_max_age_seconds,
+            weekly_reset_preference,
+            routing_strategy,
+            model,
+            exclude_account_ids,
+            additional_limit_name,
         )
+        return AccountSelection(account=account, error_message=None, error_code=None)
 
-    exc = exc_info.value
-    assert exc.status_code == 400
-    assert exc.payload["error"] == {
-        "message": (
-            "Previous response with id 'resp_missing_alias' not found. "
-            "HTTP bridge continuity was lost. Replay x-codex-turn-state or retry with a stable prompt_cache_key."
-        ),
-        "type": "invalid_request_error",
-        "code": "previous_response_not_found",
-        "param": "previous_response_id",
-    }
+    async def fake_ensure_fresh_with_budget(self, target, *, force=False, timeout_seconds):
+        del self, force, timeout_seconds
+        return target
+
+    async def fake_connect_responses_websocket(
+        headers,
+        access_token,
+        account_id_header,
+        *,
+        base_url=None,
+        session=None,
+    ):
+        del access_token, account_id_header, base_url, session
+        connect_headers_seen.append(dict(headers))
+        return upstreams.pop(0)
+
+    monkeypatch.setattr(proxy_module.ProxyService, "_select_account_with_budget", fake_select_account_with_budget)
+    monkeypatch.setattr(proxy_module.ProxyService, "_ensure_fresh_with_budget", fake_ensure_fresh_with_budget)
+    monkeypatch.setattr(proxy_module, "connect_responses_websocket", fake_connect_responses_websocket)
+
+    first = await async_client.post(
+        "/v1/responses",
+        json={
+            "model": "gpt-5.1",
+            "instructions": "Return exactly OK.",
+            "input": "hello",
+            "prompt_cache_key": "turn-state-recreate-a",
+        },
+    )
+    assert first.status_code == 200
+    turn_state = first.headers["x-codex-turn-state"]
+    first_body = first.json()
+
+    async with service._http_bridge_lock:
+        stale_sessions = list(service._http_bridge_sessions.values())
+        service._http_bridge_sessions.clear()
+        service._http_bridge_turn_state_index.clear()
+    for stale_session in stale_sessions:
+        await service._close_http_bridge_session(stale_session)
+
+    second = await async_client.post(
+        "/v1/responses",
+        headers={"x-codex-turn-state": turn_state},
+        json={
+            "model": "gpt-5.1",
+            "instructions": "Return exactly OK.",
+            "input": "hello-again",
+            "prompt_cache_key": "turn-state-recreate-b",
+            "previous_response_id": first_body["id"],
+        },
+    )
+
+    assert second.status_code == 200
+    assert connect_headers_seen[1]["x-codex-turn-state"] == turn_state
 
 
 @pytest.mark.asyncio
@@ -949,7 +1028,7 @@ async def test_v1_responses_http_bridge_replayed_turn_state_alias_preserves_owne
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -964,7 +1043,7 @@ async def test_v1_responses_http_bridge_replayed_turn_state_alias_preserves_owne
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -1155,7 +1234,7 @@ async def test_v1_responses_http_bridge_generated_turn_state_fails_closed_withou
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -1170,7 +1249,7 @@ async def test_v1_responses_http_bridge_generated_turn_state_fails_closed_withou
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -1225,7 +1304,7 @@ async def test_v1_responses_http_bridge_turn_state_alias_respects_api_key_isolat
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -1240,7 +1319,7 @@ async def test_v1_responses_http_bridge_turn_state_alias_respects_api_key_isolat
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -1347,7 +1426,7 @@ async def test_v1_responses_http_bridge_preserves_prior_turn_state_aliases(
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -1362,7 +1441,7 @@ async def test_v1_responses_http_bridge_preserves_prior_turn_state_aliases(
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -1468,7 +1547,7 @@ async def test_v1_responses_http_bridge_close_waits_for_turn_state_index_lock(
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -1483,7 +1562,7 @@ async def test_v1_responses_http_bridge_close_waits_for_turn_state_index_lock(
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -1570,7 +1649,7 @@ async def test_v1_responses_http_bridge_allows_unstable_request_key_even_on_non_
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -1585,7 +1664,7 @@ async def test_v1_responses_http_bridge_allows_unstable_request_key_even_on_non_
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -1675,7 +1754,7 @@ async def test_v1_responses_http_bridge_reconnect_uses_last_upstream_turn_state(
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -1690,7 +1769,7 @@ async def test_v1_responses_http_bridge_reconnect_uses_last_upstream_turn_state(
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -1794,7 +1873,7 @@ async def test_v1_responses_http_bridge_session_id_reconnect_keeps_upstream_turn
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -1809,7 +1888,7 @@ async def test_v1_responses_http_bridge_session_id_reconnect_keeps_upstream_turn
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -1913,7 +1992,7 @@ async def test_v1_responses_http_bridge_reconnect_fails_when_reader_cancel_times
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -1928,7 +2007,7 @@ async def test_v1_responses_http_bridge_reconnect_fails_when_reader_cancel_times
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -2050,7 +2129,7 @@ async def test_v1_responses_http_bridge_prefers_evicting_prompt_cache_session_be
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -2065,7 +2144,7 @@ async def test_v1_responses_http_bridge_prefers_evicting_prompt_cache_session_be
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -2258,7 +2337,7 @@ async def test_get_or_create_http_bridge_session_honors_passed_prompt_cache_idle
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -2273,7 +2352,7 @@ async def test_get_or_create_http_bridge_session_honors_passed_prompt_cache_idle
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -2337,7 +2416,7 @@ async def test_v1_responses_http_bridge_reuses_upstream_websocket_and_preserves_
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -2352,7 +2431,7 @@ async def test_v1_responses_http_bridge_reuses_upstream_websocket_and_preserves_
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -2433,7 +2512,7 @@ async def test_backend_responses_http_bridge_reuses_upstream_websocket_and_prese
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -2448,7 +2527,7 @@ async def test_backend_responses_http_bridge_reuses_upstream_websocket_and_prese
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -2531,7 +2610,7 @@ async def test_backend_responses_http_bridge_prefers_codex_session_header_over_p
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -2544,7 +2623,7 @@ async def test_backend_responses_http_bridge_prefers_codex_session_header_over_p
             kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -2634,7 +2713,7 @@ async def test_backend_responses_http_emits_turn_state_header_and_reuses_when_re
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -2647,7 +2726,7 @@ async def test_backend_responses_http_emits_turn_state_header_and_reuses_when_re
             kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -2734,7 +2813,7 @@ async def test_v1_responses_http_bridge_reuses_session_across_model_change_for_p
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -2749,7 +2828,7 @@ async def test_v1_responses_http_bridge_reuses_session_across_model_change_for_p
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -2830,7 +2909,7 @@ async def test_v1_responses_http_bridge_requires_live_session_for_previous_respo
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -2845,7 +2924,7 @@ async def test_v1_responses_http_bridge_requires_live_session_for_previous_respo
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -2937,7 +3016,7 @@ async def test_v1_responses_http_emits_turn_state_header_and_reuses_when_replaye
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -2950,7 +3029,7 @@ async def test_v1_responses_http_emits_turn_state_header_and_reuses_when_replaye
             kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -3026,7 +3105,7 @@ async def test_v1_responses_http_bridge_streaming_path_uses_persistent_upstream_
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -3041,7 +3120,7 @@ async def test_v1_responses_http_bridge_streaming_path_uses_persistent_upstream_
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -3226,7 +3305,7 @@ async def test_backend_responses_http_bridge_refresh_failure_returns_proxy_error
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -3241,7 +3320,7 @@ async def test_backend_responses_http_bridge_refresh_failure_returns_proxy_error
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -3291,7 +3370,7 @@ async def test_v1_responses_http_bridge_refresh_failure_returns_proxy_error(asyn
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -3306,7 +3385,7 @@ async def test_v1_responses_http_bridge_refresh_failure_returns_proxy_error(asyn
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -3355,7 +3434,7 @@ async def test_v1_responses_http_bridge_transient_refresh_failure_returns_upstre
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -3370,7 +3449,7 @@ async def test_v1_responses_http_bridge_transient_refresh_failure_returns_upstre
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -3425,7 +3504,7 @@ async def test_v1_responses_http_bridge_does_not_register_turn_state_alias_befor
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -3440,7 +3519,7 @@ async def test_v1_responses_http_bridge_does_not_register_turn_state_alias_befor
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -3533,7 +3612,7 @@ async def test_v1_responses_http_bridge_reconnects_after_clean_upstream_close(as
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -3548,7 +3627,7 @@ async def test_v1_responses_http_bridge_reconnects_after_clean_upstream_close(as
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -3620,7 +3699,7 @@ async def test_v1_responses_http_bridge_does_not_open_fresh_session_for_previous
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -3635,7 +3714,7 @@ async def test_v1_responses_http_bridge_does_not_open_fresh_session_for_previous
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -3707,6 +3786,110 @@ async def test_v1_responses_http_bridge_does_not_open_fresh_session_for_previous
 
 
 @pytest.mark.asyncio
+async def test_v1_responses_http_bridge_revives_stale_session_for_previous_response_id_with_local_turn_state(
+    async_client,
+    monkeypatch,
+):
+    _install_bridge_settings(monkeypatch, enabled=True)
+    account_id = await _import_account(
+        async_client,
+        "acc_http_bridge_previous_response_revive",
+        "http-bridge-previous-response-revive@example.com",
+    )
+    account = await _get_account(account_id)
+    first_upstream = _ClosingTurnStateBridgeUpstreamWebSocket("upstream_turn_state_stale")
+    second_upstream = _FakeBridgeUpstreamWebSocket()
+    upstreams = [first_upstream, second_upstream]
+    connect_count = 0
+    connect_headers_seen: list[dict[str, str]] = []
+
+    async def fake_select_account_with_budget(
+        self,
+        deadline,
+        *,
+        request_id,
+        kind,
+        sticky_key,
+        sticky_kind,
+        reallocate_sticky,
+        sticky_max_age_seconds,
+        weekly_reset_preference,
+        routing_strategy,
+        model,
+        exclude_account_ids=None,
+        additional_limit_name=None,
+    ):
+        del (
+            self,
+            deadline,
+            request_id,
+            kind,
+            sticky_key,
+            sticky_kind,
+            reallocate_sticky,
+            sticky_max_age_seconds,
+            weekly_reset_preference,
+            routing_strategy,
+            model,
+            exclude_account_ids,
+            additional_limit_name,
+        )
+        return AccountSelection(account=account, error_message=None, error_code=None)
+
+    async def fake_ensure_fresh_with_budget(self, target, *, force=False, timeout_seconds):
+        del self, force, timeout_seconds
+        return target
+
+    async def fake_connect_responses_websocket(
+        headers,
+        access_token,
+        account_id_header,
+        *,
+        base_url=None,
+        session=None,
+    ):
+        del access_token, account_id_header, base_url, session
+        nonlocal connect_count
+        connect_headers_seen.append(dict(headers))
+        upstream = upstreams[connect_count]
+        connect_count += 1
+        return upstream
+
+    monkeypatch.setattr(proxy_module.ProxyService, "_select_account_with_budget", fake_select_account_with_budget)
+    monkeypatch.setattr(proxy_module.ProxyService, "_ensure_fresh_with_budget", fake_ensure_fresh_with_budget)
+    monkeypatch.setattr(proxy_module, "connect_responses_websocket", fake_connect_responses_websocket)
+
+    first = await async_client.post(
+        "/v1/responses",
+        json={
+            "model": "gpt-5.1",
+            "instructions": "Return exactly OK.",
+            "input": "hello",
+            "prompt_cache_key": "http-bridge-previous-response-revive",
+        },
+    )
+    assert first.status_code == 200
+    first_body = first.json()
+
+    second = await async_client.post(
+        "/v1/responses",
+        json={
+            "model": "gpt-5.1",
+            "instructions": "Return exactly OK.",
+            "input": "hello-again",
+            "prompt_cache_key": "http-bridge-previous-response-revive",
+            "previous_response_id": first_body["id"],
+        },
+    )
+
+    assert second.status_code == 200
+    assert second.json()["id"] == "resp_bridge_1"
+    assert connect_count == 2
+    assert connect_headers_seen[1]["x-codex-turn-state"] == "upstream_turn_state_stale"
+    assert json.loads(second_upstream.sent_text[0])["previous_response_id"] == first_body["id"]
+
+
+@pytest.mark.asyncio
 async def test_v1_responses_http_bridge_reuses_derived_prompt_cache_key_when_client_omits_it(async_client, monkeypatch):
     _install_bridge_settings(monkeypatch, enabled=True)
     account_id = await _import_account(async_client, "acc_http_bridge_derived", "http-bridge-derived@example.com")
@@ -3724,7 +3907,7 @@ async def test_v1_responses_http_bridge_reuses_derived_prompt_cache_key_when_cli
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -3739,7 +3922,7 @@ async def test_v1_responses_http_bridge_reuses_derived_prompt_cache_key_when_cli
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -3807,7 +3990,7 @@ async def test_v1_responses_http_bridge_prefers_session_header_for_isolation(asy
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -3822,7 +4005,7 @@ async def test_v1_responses_http_bridge_prefers_session_header_for_isolation(asy
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -3886,7 +4069,7 @@ async def test_v1_responses_http_bridge_retries_once_when_upstream_closes_before
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -3901,7 +4084,7 @@ async def test_v1_responses_http_bridge_retries_once_when_upstream_closes_before
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -3967,7 +4150,7 @@ async def test_v1_responses_http_bridge_does_not_evict_active_session_when_pool_
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -3982,7 +4165,7 @@ async def test_v1_responses_http_bridge_does_not_evict_active_session_when_pool_
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -4117,7 +4300,7 @@ async def test_v1_responses_http_bridge_does_not_evict_queued_session_when_pool_
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -4132,7 +4315,7 @@ async def test_v1_responses_http_bridge_does_not_evict_queued_session_when_pool_
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -4280,7 +4463,7 @@ async def test_v1_responses_http_bridge_enforces_queue_limit_atomically_for_same
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -4295,7 +4478,7 @@ async def test_v1_responses_http_bridge_enforces_queue_limit_atomically_for_same
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -5088,7 +5271,7 @@ async def test_v1_responses_http_bridge_stream_failure_remains_valid_sse(async_c
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -5103,7 +5286,7 @@ async def test_v1_responses_http_bridge_stream_failure_remains_valid_sse(async_c
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -5167,7 +5350,7 @@ async def test_v1_responses_http_bridge_cancellation_releases_queued_slot(async_
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -5182,7 +5365,7 @@ async def test_v1_responses_http_bridge_cancellation_releases_queued_slot(async_
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -5286,7 +5469,7 @@ async def test_v1_responses_http_bridge_send_retry_restarts_reader(async_client,
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -5301,7 +5484,7 @@ async def test_v1_responses_http_bridge_send_retry_restarts_reader(async_client,
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -5471,7 +5654,7 @@ async def test_v1_responses_http_bridge_send_failure_returns_previous_response_n
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -5486,7 +5669,7 @@ async def test_v1_responses_http_bridge_send_failure_returns_previous_response_n
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -5562,6 +5745,113 @@ async def test_v1_responses_http_bridge_send_failure_returns_previous_response_n
 
 
 @pytest.mark.asyncio
+async def test_v1_responses_http_bridge_send_failure_recovers_previous_response_id_with_turn_state(
+    async_client,
+    app_instance,
+    monkeypatch,
+):
+    _install_bridge_settings(monkeypatch, enabled=True)
+    account_id = await _import_account(
+        async_client,
+        "acc_http_bridge_send_failure_recover_previous_response",
+        "http-bridge-send-failure-recover-previous-response@example.com",
+    )
+    account = await _get_account(account_id)
+    initial_upstream = _TurnStateBridgeUpstreamWebSocket("upstream_turn_state_1")
+    replacement_upstream = _TurnStateBridgeUpstreamWebSocket("upstream_turn_state_2")
+    failing_upstream = _FailingSendThenCloseUpstreamWebSocket()
+    connect_count = 0
+    connect_headers_seen: list[dict[str, str]] = []
+
+    async def fake_select_account_with_budget(
+        self,
+        deadline,
+        *,
+        request_id,
+        kind,
+        sticky_key,
+        sticky_kind,
+        reallocate_sticky,
+        sticky_max_age_seconds,
+        weekly_reset_preference,
+        routing_strategy,
+        model,
+        exclude_account_ids=None,
+        additional_limit_name=None,
+    ):
+        del (
+            self,
+            deadline,
+            request_id,
+            kind,
+            sticky_key,
+            sticky_kind,
+            reallocate_sticky,
+            sticky_max_age_seconds,
+            weekly_reset_preference,
+            routing_strategy,
+            model,
+            exclude_account_ids,
+            additional_limit_name,
+        )
+        return AccountSelection(account=account, error_message=None, error_code=None)
+
+    async def fake_ensure_fresh_with_budget(self, target, *, force=False, timeout_seconds):
+        del self, force, timeout_seconds
+        return target
+
+    async def fake_connect_responses_websocket(
+        headers,
+        access_token,
+        account_id_header,
+        *,
+        base_url=None,
+        session=None,
+    ):
+        del access_token, account_id_header, base_url, session
+        nonlocal connect_count
+        connect_count += 1
+        connect_headers_seen.append(dict(headers))
+        return initial_upstream if connect_count == 1 else replacement_upstream
+
+    monkeypatch.setattr(proxy_module.ProxyService, "_select_account_with_budget", fake_select_account_with_budget)
+    monkeypatch.setattr(proxy_module.ProxyService, "_ensure_fresh_with_budget", fake_ensure_fresh_with_budget)
+    monkeypatch.setattr(proxy_module, "connect_responses_websocket", fake_connect_responses_websocket)
+
+    first = await async_client.post(
+        "/v1/responses",
+        json={
+            "model": "gpt-5.1",
+            "instructions": "Return exactly OK.",
+            "input": "hello",
+            "prompt_cache_key": "send-failure-recover-previous-response",
+        },
+    )
+    assert first.status_code == 200
+    first_body = first.json()
+
+    service = get_proxy_service_for_app(app_instance)
+    async with service._http_bridge_lock:
+        session = next(iter(service._http_bridge_sessions.values()))
+        session.upstream = cast(proxy_module.UpstreamResponsesWebSocket, failing_upstream)
+
+    second = await async_client.post(
+        "/v1/responses",
+        json={
+            "model": "gpt-5.1",
+            "instructions": "Return exactly OK.",
+            "input": "hello-again",
+            "prompt_cache_key": "send-failure-recover-previous-response",
+            "previous_response_id": first_body["id"],
+        },
+    )
+
+    assert second.status_code == 200
+    assert connect_count == 2
+    assert connect_headers_seen[1]["x-codex-turn-state"] == "upstream_turn_state_1"
+
+
+@pytest.mark.asyncio
 async def test_v1_responses_http_bridge_precreated_disconnect_returns_previous_response_not_found(
     async_client,
     app_instance,
@@ -5588,7 +5878,7 @@ async def test_v1_responses_http_bridge_precreated_disconnect_returns_previous_r
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -5603,7 +5893,7 @@ async def test_v1_responses_http_bridge_precreated_disconnect_returns_previous_r
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -5679,6 +5969,113 @@ async def test_v1_responses_http_bridge_precreated_disconnect_returns_previous_r
 
 
 @pytest.mark.asyncio
+async def test_v1_responses_http_bridge_precreated_disconnect_recovers_previous_response_id_with_turn_state(
+    async_client,
+    app_instance,
+    monkeypatch,
+):
+    _install_bridge_settings(monkeypatch, enabled=True)
+    account_id = await _import_account(
+        async_client,
+        "acc_http_bridge_precreated_recover_previous_response",
+        "http-bridge-precreated-recover-previous-response@example.com",
+    )
+    account = await _get_account(account_id)
+    initial_upstream = _TurnStateBridgeUpstreamWebSocket("upstream_turn_state_1")
+    replacement_upstream = _TurnStateBridgeUpstreamWebSocket("upstream_turn_state_2")
+    precreated_close_upstream = _PrecreatedCloseUpstreamWebSocket()
+    connect_count = 0
+    connect_headers_seen: list[dict[str, str]] = []
+
+    async def fake_select_account_with_budget(
+        self,
+        deadline,
+        *,
+        request_id,
+        kind,
+        sticky_key,
+        sticky_kind,
+        reallocate_sticky,
+        sticky_max_age_seconds,
+        weekly_reset_preference,
+        routing_strategy,
+        model,
+        exclude_account_ids=None,
+        additional_limit_name=None,
+    ):
+        del (
+            self,
+            deadline,
+            request_id,
+            kind,
+            sticky_key,
+            sticky_kind,
+            reallocate_sticky,
+            sticky_max_age_seconds,
+            weekly_reset_preference,
+            routing_strategy,
+            model,
+            exclude_account_ids,
+            additional_limit_name,
+        )
+        return AccountSelection(account=account, error_message=None, error_code=None)
+
+    async def fake_ensure_fresh_with_budget(self, target, *, force=False, timeout_seconds):
+        del self, force, timeout_seconds
+        return target
+
+    async def fake_connect_responses_websocket(
+        headers,
+        access_token,
+        account_id_header,
+        *,
+        base_url=None,
+        session=None,
+    ):
+        del access_token, account_id_header, base_url, session
+        nonlocal connect_count
+        connect_count += 1
+        connect_headers_seen.append(dict(headers))
+        return initial_upstream if connect_count == 1 else replacement_upstream
+
+    monkeypatch.setattr(proxy_module.ProxyService, "_select_account_with_budget", fake_select_account_with_budget)
+    monkeypatch.setattr(proxy_module.ProxyService, "_ensure_fresh_with_budget", fake_ensure_fresh_with_budget)
+    monkeypatch.setattr(proxy_module, "connect_responses_websocket", fake_connect_responses_websocket)
+
+    first = await async_client.post(
+        "/v1/responses",
+        json={
+            "model": "gpt-5.1",
+            "instructions": "Return exactly OK.",
+            "input": "hello",
+            "prompt_cache_key": "precreated-recover-previous-response",
+        },
+    )
+    assert first.status_code == 200
+    first_body = first.json()
+
+    service = get_proxy_service_for_app(app_instance)
+    async with service._http_bridge_lock:
+        session = next(iter(service._http_bridge_sessions.values()))
+        session.upstream = cast(proxy_module.UpstreamResponsesWebSocket, precreated_close_upstream)
+
+    second = await async_client.post(
+        "/v1/responses",
+        json={
+            "model": "gpt-5.1",
+            "instructions": "Return exactly OK.",
+            "input": "hello-again",
+            "prompt_cache_key": "precreated-recover-previous-response",
+            "previous_response_id": first_body["id"],
+        },
+    )
+
+    assert second.status_code == 200
+    assert connect_count == 2
+    assert connect_headers_seen[1]["x-codex-turn-state"] == "upstream_turn_state_1"
+
+
+@pytest.mark.asyncio
 async def test_v1_responses_http_bridge_send_retry_keeps_session_open_for_followup_request(
     async_client,
     app_instance,
@@ -5705,7 +6102,7 @@ async def test_v1_responses_http_bridge_send_retry_keeps_session_open_for_follow
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -5720,7 +6117,7 @@ async def test_v1_responses_http_bridge_send_retry_keeps_session_open_for_follow
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,
@@ -5839,7 +6236,7 @@ async def test_v1_responses_http_bridge_stream_cancel_detaches_pending_request(
         sticky_kind,
         reallocate_sticky,
         sticky_max_age_seconds,
-        prefer_earlier_reset_accounts,
+        weekly_reset_preference,
         routing_strategy,
         model,
         exclude_account_ids=None,
@@ -5854,7 +6251,7 @@ async def test_v1_responses_http_bridge_stream_cancel_detaches_pending_request(
             sticky_kind,
             reallocate_sticky,
             sticky_max_age_seconds,
-            prefer_earlier_reset_accounts,
+            weekly_reset_preference,
             routing_strategy,
             model,
             exclude_account_ids,

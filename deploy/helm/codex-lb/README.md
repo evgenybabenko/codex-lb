@@ -235,6 +235,9 @@ networkPolicy:
     kubernetes.io/metadata.name: ingress-nginx
 ```
 
+`values-prod.yaml` sets this allowlist to `ingress-nginx` by default. Override it
+if your ingress controller runs in a different namespace.
+
 ## Connection Pool Sizing
 
 Each pod keeps its own SQLAlchemy pool.
@@ -495,6 +498,12 @@ kubectl port-forward svc/codex-lb 2455:2455 -n <namespace>
 curl -i http://127.0.0.1:2455/health/live
 curl -i http://127.0.0.1:2455/health/ready
 ```
+
+This validates the dashboard and API surface on `2455`, but it does not make
+the browser OAuth callback magically reachable. The account browser login flow
+still uses `http://localhost:1455/auth/callback`, so port-forwarded or remote
+cluster installs should prefer `auth.json` import or the manual callback flow
+instead of assuming the single `2455` service port-forward is enough.
 
 ## Troubleshooting
 

@@ -20,6 +20,7 @@ import type { ApiKey } from "@/features/api-keys/schemas";
 import { ApiKeyInfo } from "@/features/apis/components/api-key-info";
 import { ApiTrendChart } from "@/features/apis/components/api-trend-chart";
 import type { ApiKeyUsage7DayResponse } from "@/features/apis/schemas";
+import { useT } from "@/lib/i18n";
 
 export type ApiDetailProps = {
 	apiKey: ApiKey | null;
@@ -59,6 +60,7 @@ export function ApiDetail({
 	onRegenerate,
 	onToggleActive,
 }: ApiDetailProps) {
+	const t = useT();
 	const [showAccumulated, setShowAccumulated] = useState(false);
 
 	const chartData = useMemo(() => {
@@ -82,10 +84,10 @@ export function ApiDetail({
 
 	const usageMessage = useMemo(() => {
 		if (usage7Day) return null;
-		if (usage7DayLoading) return "Loading 7-day usage...";
-		if (usage7DayError) return "7-day usage unavailable";
+		if (usage7DayLoading) return t("apiUsageLoading");
+		if (usage7DayError) return t("apiUsageUnavailable");
 		return null;
-	}, [usage7Day, usage7DayError, usage7DayLoading]);
+	}, [t, usage7Day, usage7DayError, usage7DayLoading]);
 
 	if (!apiKey) {
 		return (
@@ -94,10 +96,10 @@ export function ApiDetail({
 					<KeyRound className="h-5 w-5 text-muted-foreground" />
 				</div>
 				<p className="mt-3 text-sm font-medium text-muted-foreground">
-					Select an API key
+					{t("apiSelectTitle")}
 				</p>
 				<p className="mt-1 text-xs text-muted-foreground/70">
-					Choose an API key from the list to view details.
+					{t("apiSelectDescription")}
 				</p>
 			</div>
 		);
@@ -122,17 +124,17 @@ export function ApiDetail({
 							disabled={busy}
 						>
 							<Ellipsis className="size-4" />
-							<span className="sr-only">Actions</span>
+							<span className="sr-only">{t("commonActions")}</span>
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
 						<DropdownMenuItem onClick={() => onEdit(apiKey)}>
 							<Pencil className="size-4" />
-							Edit
+							{t("commonEdit")}
 						</DropdownMenuItem>
 						<DropdownMenuItem onClick={() => onRegenerate(apiKey)}>
 							<RefreshCw className="size-4" />
-							Regenerate
+							{t("commonRegenerate")}
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
@@ -142,16 +144,16 @@ export function ApiDetail({
 				<div className="flex items-center justify-end gap-3">
 					<div className="flex items-center gap-3 text-[10px] text-muted-foreground">
 						<span className="flex items-center gap-1.5">
-							Tokens
+							{t("apiChartTokens")}
 							<span className="inline-block h-2 w-2 rounded-full bg-chart-2" />
 						</span>
 						<span className="flex items-center gap-1.5">
-							Cost
+							{t("apiChartCost")}
 							<span className="inline-block h-2 w-2 rounded-full bg-chart-1" />
 						</span>
 					</div>
 					<div className="flex items-center gap-1.5 rounded-md border px-2 py-1">
-						<span className="text-[10px]">Accumulated</span>
+						<span className="text-[10px]">{t("apiChartAccumulated")}</span>
 						<Switch
 							size="sm"
 							checked={showAccumulated}
@@ -187,7 +189,7 @@ export function ApiDetail({
 						disabled={busy}
 					>
 						<Ellipsis className="h-3.5 w-3.5" />
-						Disable
+						{t("apiDisable")}
 					</Button>
 				) : (
 					<Button
@@ -198,7 +200,7 @@ export function ApiDetail({
 						disabled={busy}
 					>
 						<Play className="h-3.5 w-3.5" />
-						Enable
+						{t("apiEnable")}
 					</Button>
 				)}
 				<Button
@@ -210,7 +212,7 @@ export function ApiDetail({
 					disabled={busy}
 				>
 					<Trash2 className="h-3.5 w-3.5" />
-					Delete
+					{t("commonDelete")}
 				</Button>
 			</div>
 		</div>

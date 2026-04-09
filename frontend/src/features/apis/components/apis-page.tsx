@@ -18,6 +18,7 @@ import {
 	useApiKeyUsage7Day,
 } from "@/features/apis/hooks/use-apis";
 import { useDialogState } from "@/hooks/use-dialog-state";
+import { useT } from "@/lib/i18n";
 import { getErrorMessageOrNull } from "@/utils/errors";
 
 const ApiKeyCreateDialog = lazy(() =>
@@ -37,6 +38,7 @@ const ApiKeyCreatedDialog = lazy(() =>
 );
 
 export function ApisPage() {
+	const t = useT();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const {
 		apiKeysQuery,
@@ -108,13 +110,6 @@ export function ApisPage() {
 
 	return (
 		<div className="animate-fade-in-up space-y-6">
-			<div>
-				<h1 className="text-2xl font-semibold tracking-tight">APIs</h1>
-				<p className="mt-1 text-sm text-muted-foreground">
-					Manage API keys for client access and usage monitoring.
-				</p>
-			</div>
-
 			{pageError ? (
 				<AlertMessage variant="error">{pageError}</AlertMessage>
 			) : null}
@@ -124,7 +119,7 @@ export function ApisPage() {
 			) : !apiKeysQuery.data ? (
 				<div className="space-y-3 rounded-xl border bg-card p-4">
 					<AlertMessage variant="error">
-						{listError ?? "Failed to load API keys"}
+						{listError ?? t("apisFailedLoad")}
 					</AlertMessage>
 					<Button
 						type="button"
@@ -135,7 +130,7 @@ export function ApisPage() {
 						}}
 						disabled={apiKeysQuery.isFetching}
 					>
-						Retry
+						{t("commonRetry")}
 					</Button>
 				</div>
 			) : (
@@ -203,9 +198,9 @@ export function ApisPage() {
 
 			<ConfirmDialog
 				open={deleteDialog.open}
-				title="Delete API key"
-				description="This key will stop working immediately."
-				confirmLabel="Delete"
+				title={t("apiKeysDeleteTitle")}
+				description={t("apiKeysDeleteDescription")}
+				confirmLabel={t("commonDelete")}
 				onOpenChange={deleteDialog.onOpenChange}
 				onConfirm={() => {
 					if (!deleteDialog.data) return;
@@ -220,7 +215,7 @@ export function ApisPage() {
 
 			<LoadingOverlay
 				visible={!!apiKeysQuery.data && mutationBusy}
-				label="Updating API keys..."
+				label={t("apisUpdating")}
 			/>
 		</div>
 	);

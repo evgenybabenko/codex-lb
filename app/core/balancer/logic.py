@@ -19,9 +19,12 @@ PERMANENT_FAILURE_CODES = {
 }
 
 SECONDS_PER_DAY = 60 * 60 * 24
+SECONDS_PER_HOUR = 60 * 60
 UNKNOWN_RESET_BUCKET_DAYS = 10_000
 RoutingStrategy = Literal["usage_weighted", "round_robin", "capacity_weighted"]
+WeeklyResetPreference = Literal["disabled", "earlier_reset", "expiring_quota_priority"]
 UNKNOWN_PLAN_FALLBACK = "free"
+EXPIRING_QUOTA_PRIORITY_HALF_LIFE_HOURS = 12.0
 CAPACITY_PLAN_ALIASES = {
     "education": "edu",
     "k12": "edu",
@@ -74,6 +77,31 @@ def _prefer_earlier_reset_candidates(available: list[AccountState], current: flo
     return [state for state in available if _reset_bucket_days(state, current) == earliest_bucket]
 
 
+def _remaining_secondary_fraction(state: AccountState) -> float | None:
+    if state.secondary_used_percent is not None:
+        used_pct = state.secondary_used_percent
+    elif state.used_percent is not None:
+        used_pct = state.used_percent
+    else:
+        return None
+    return max(0.0, 1.0 - min(used_pct, 100.0) / 100.0)
+
+
+def _prefer_full_weekly_capacity_candidates(available: list[AccountState]) -> list[AccountState]:
+    full_capacity = [
+        state
+        for state in available
+        if state.secondary_reset_at is not None and (_remaining_secondary_fraction(state) or 0.0) >= 0.999_999
+    ]
+    return full_capacity or available
+
+
+def _hours_until_secondary_reset(state: AccountState, current: float) -> float | None:
+    if state.secondary_reset_at is None:
+        return None
+    return max(0.0, (state.secondary_reset_at - current) / SECONDS_PER_HOUR)
+
+
 def _fallback_secondary_capacity_credits(plan_type: str | None) -> float:
     normalized = (plan_type or "").strip().lower()
     resolved_plan = CAPACITY_PLAN_ALIASES.get(normalized, normalized or UNKNOWN_PLAN_FALLBACK)
@@ -87,7 +115,8 @@ def select_account(
     states: Iterable[AccountState],
     now: float | None = None,
     *,
-    prefer_earlier_reset: bool = False,
+    weekly_reset_preference: WeeklyResetPreference = "disabled",
+    prioritize_full_weekly_capacity: bool = True,
     routing_strategy: RoutingStrategy = "capacity_weighted",
     allow_backoff_fallback: bool = True,
     deterministic_probe: bool = False,
@@ -174,25 +203,37 @@ def select_account(
                 return SelectionResult(None, f"Rate limit exceeded. Try again in {wait_seconds:.0f}s")
             return SelectionResult(None, "No available accounts")
 
-    def _reset_first_sort_key(state: AccountState) -> tuple[int, float, float, float, str]:
-        reset_bucket_days = _reset_bucket_days(state, current)
-        secondary_used, primary_used, last_selected, account_id = _usage_sort_key(state)
-        return reset_bucket_days, secondary_used, primary_used, last_selected, account_id
-
     def _round_robin_sort_key(state: AccountState) -> tuple[float, str]:
         # Pick the least recently selected account, then stabilize by account_id.
         return state.last_selected_at or 0.0, state.account_id
 
+    candidate_pool = available
+    if prioritize_full_weekly_capacity:
+        candidate_pool = _prefer_full_weekly_capacity_candidates(candidate_pool)
+    if weekly_reset_preference == "earlier_reset":
+        candidate_pool = _prefer_earlier_reset_candidates(candidate_pool, current)
+
     if routing_strategy == "round_robin":
-        selected = min(available, key=_round_robin_sort_key)
-    elif routing_strategy == "capacity_weighted":
-        candidate_pool = _prefer_earlier_reset_candidates(available, current) if prefer_earlier_reset else available
-        if deterministic_probe:
-            selected = min(candidate_pool, key=_capacity_probe_sort_key)
+        if weekly_reset_preference == "expiring_quota_priority":
+            selected = min(candidate_pool, key=lambda state: _expiring_quota_round_robin_sort_key(state, current))
         else:
-            selected = _select_capacity_weighted(candidate_pool)
+            selected = min(candidate_pool, key=_round_robin_sort_key)
+    elif routing_strategy == "capacity_weighted":
+        if weekly_reset_preference == "expiring_quota_priority":
+            if deterministic_probe:
+                selected = min(candidate_pool, key=lambda state: _expiring_quota_capacity_probe_sort_key(state, current))
+            else:
+                selected = _select_expiring_quota_weighted(candidate_pool, current)
+        else:
+            if deterministic_probe:
+                selected = min(candidate_pool, key=_capacity_probe_sort_key)
+            else:
+                selected = _select_capacity_weighted(candidate_pool)
     else:
-        selected = min(available, key=_reset_first_sort_key if prefer_earlier_reset else _usage_sort_key)
+        if weekly_reset_preference == "expiring_quota_priority":
+            selected = min(candidate_pool, key=lambda state: _expiring_quota_usage_sort_key(state, current))
+        else:
+            selected = min(candidate_pool, key=_usage_sort_key)
     return SelectionResult(selected, None)
 
 
@@ -217,6 +258,58 @@ def _capacity_probe_sort_key(state: AccountState) -> tuple[float, float, float, 
     return (-_remaining_secondary_credits(state), secondary_used, primary_used, last_selected, account_id)
 
 
+def _expiring_quota_priority(state: AccountState, current: float) -> float:
+    remaining = _remaining_secondary_credits(state)
+    if remaining <= 0.0:
+        return 0.0
+    hours_until_reset = _hours_until_secondary_reset(state, current)
+    if hours_until_reset is None:
+        return 0.0
+    decay = 0.5 ** (hours_until_reset / EXPIRING_QUOTA_PRIORITY_HALF_LIFE_HOURS)
+    return remaining * decay
+
+
+def _expiring_quota_usage_sort_key(state: AccountState, current: float) -> tuple[float, float, float, float, float, str]:
+    priority = _expiring_quota_priority(state, current)
+    hours_until_reset = _hours_until_secondary_reset(state, current)
+    secondary_used, primary_used, last_selected, account_id = _usage_sort_key(state)
+    return (
+        -priority,
+        hours_until_reset if hours_until_reset is not None else float("inf"),
+        secondary_used,
+        primary_used,
+        last_selected,
+        account_id,
+    )
+
+
+def _expiring_quota_round_robin_sort_key(state: AccountState, current: float) -> tuple[float, float, float, str]:
+    priority = _expiring_quota_priority(state, current)
+    hours_until_reset = _hours_until_secondary_reset(state, current)
+    return (
+        -priority,
+        hours_until_reset if hours_until_reset is not None else float("inf"),
+        state.last_selected_at or 0.0,
+        state.account_id,
+    )
+
+
+def _expiring_quota_capacity_probe_sort_key(
+    state: AccountState, current: float
+) -> tuple[float, float, float, float, float, str]:
+    priority = _expiring_quota_priority(state, current)
+    hours_until_reset = _hours_until_secondary_reset(state, current)
+    secondary_used, primary_used, last_selected, account_id = _usage_sort_key(state)
+    return (
+        -priority,
+        hours_until_reset if hours_until_reset is not None else float("inf"),
+        secondary_used,
+        primary_used,
+        last_selected,
+        account_id,
+    )
+
+
 def _select_capacity_weighted(available: list[AccountState]) -> AccountState:
     """Select an account with probability proportional to remaining secondary credits."""
     weights = [_remaining_secondary_credits(s) for s in available]
@@ -224,6 +317,15 @@ def _select_capacity_weighted(available: list[AccountState]) -> AccountState:
     if total <= 0.0:
         # All accounts exhausted — fall back to deterministic usage-weighted
         return min(available, key=_usage_sort_key)
+    return random.choices(available, weights=weights, k=1)[0]
+
+
+def _select_expiring_quota_weighted(available: list[AccountState], current: float) -> AccountState:
+    """Select an account with probability proportional to expiring weekly quota priority."""
+    weights = [_expiring_quota_priority(state, current) for state in available]
+    total = sum(weights)
+    if total <= 0.0:
+        return _select_capacity_weighted(available)
     return random.choices(available, weights=weights, k=1)[0]
 
 

@@ -26,6 +26,7 @@ import { ExpiryPicker } from "@/features/api-keys/components/expiry-picker";
 import { LimitRulesEditor } from "@/features/api-keys/components/limit-rules-editor";
 import { ModelMultiSelect } from "@/features/api-keys/components/model-multi-select";
 import type { ApiKey, ApiKeyUpdateRequest, LimitRuleCreate, LimitType, ServiceTierType } from "@/features/api-keys/schemas";
+import { useT } from "@/lib/i18n";
 import { parseDate } from "@/utils/formatters";
 
 import { hasLimitRuleChanges, normalizeLimitRules } from "./limit-rules-utils";
@@ -62,6 +63,7 @@ function limitsToCreateRules(apiKey: ApiKey): LimitRuleCreate[] {
 }
 
 function ApiKeyEditForm({ apiKey, busy, onSubmit, onClose }: ApiKeyEditFormProps) {
+  const t = useT();
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -110,14 +112,14 @@ function ApiKeyEditForm({ apiKey, busy, onSubmit, onClose }: ApiKeyEditFormProps
         <div className="grid gap-x-6 sm:grid-cols-2">
           {/* Left column — General */}
           <div className="max-h-[55vh] space-y-3 overflow-y-auto overscroll-contain pl-1 pr-2">
-            <h4 className="sticky top-0 bg-background pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">General</h4>
+            <h4 className="sticky top-0 bg-background pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("commonGeneral")}</h4>
 
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel>{t("commonName")}</FormLabel>
                   <FormControl>
                     <Input {...field} autoComplete="off" />
                   </FormControl>
@@ -127,12 +129,12 @@ function ApiKeyEditForm({ apiKey, busy, onSubmit, onClose }: ApiKeyEditFormProps
             />
 
             <div className="space-y-1">
-              <div className="text-sm font-medium">Allowed models</div>
+              <div className="text-sm font-medium">{t("apiFormAllowedModels")}</div>
               <ModelMultiSelect value={selectedModels} onChange={setSelectedModels} />
             </div>
 
             <div className="space-y-1">
-              <div className="text-sm font-medium">Enforced model</div>
+              <div className="text-sm font-medium">{t("apiFormEnforcedModel")}</div>
               <Input
                 value={enforcedModel}
                 onChange={(e) => setEnforcedModel(e.target.value)}
@@ -142,40 +144,40 @@ function ApiKeyEditForm({ apiKey, busy, onSubmit, onClose }: ApiKeyEditFormProps
             </div>
 
             <div className="space-y-1">
-              <div className="text-sm font-medium">Enforced reasoning</div>
+              <div className="text-sm font-medium">{t("apiFormEnforcedReasoning")}</div>
               <Select value={enforcedReasoningEffort} onValueChange={setEnforcedReasoningEffort}>
                 <SelectTrigger>
-                  <SelectValue placeholder="None" />
+                  <SelectValue placeholder={t("apiReasoningNone")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="minimal">Minimal</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="xhigh">XHigh</SelectItem>
+                  <SelectItem value="none">{t("apiReasoningNone")}</SelectItem>
+                  <SelectItem value="minimal">{t("apiReasoningMinimal")}</SelectItem>
+                  <SelectItem value="low">{t("apiReasoningLow")}</SelectItem>
+                  <SelectItem value="medium">{t("apiReasoningMedium")}</SelectItem>
+                  <SelectItem value="high">{t("apiReasoningHigh")}</SelectItem>
+                  <SelectItem value="xhigh">{t("apiReasoningXHigh")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-1">
-              <div className="text-sm font-medium">Enforced service tier</div>
+              <div className="text-sm font-medium">{t("apiFormEnforcedServiceTier")}</div>
               <Select value={enforcedServiceTier} onValueChange={setEnforcedServiceTier}>
                 <SelectTrigger>
-                  <SelectValue placeholder="None" />
+                  <SelectValue placeholder={t("apiReasoningNone")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="auto">Auto</SelectItem>
-                  <SelectItem value="default">Default</SelectItem>
-                  <SelectItem value="priority">Priority</SelectItem>
-                  <SelectItem value="flex">Flex</SelectItem>
+                  <SelectItem value="none">{t("apiReasoningNone")}</SelectItem>
+                  <SelectItem value="auto">{t("apiServiceTierAuto")}</SelectItem>
+                  <SelectItem value="default">{t("apiServiceTierDefault")}</SelectItem>
+                  <SelectItem value="priority">{t("apiServiceTierPriority")}</SelectItem>
+                  <SelectItem value="flex">{t("apiServiceTierFlex")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-1">
-              <div className="text-sm font-medium">Expiry</div>
+              <div className="text-sm font-medium">{t("apiFormExpiry")}</div>
               <ExpiryPicker value={expiresAt} onChange={setExpiresAt} />
             </div>
 
@@ -184,7 +186,7 @@ function ApiKeyEditForm({ apiKey, busy, onSubmit, onClose }: ApiKeyEditFormProps
               name="isActive"
               render={({ field }) => (
                 <div className="flex items-center justify-between rounded-md border p-2">
-                  <span className="text-sm">Active</span>
+                  <span className="text-sm">{t("apiFormActive")}</span>
                   <Switch checked={field.value} onCheckedChange={field.onChange} />
                 </div>
               )}
@@ -193,12 +195,12 @@ function ApiKeyEditForm({ apiKey, busy, onSubmit, onClose }: ApiKeyEditFormProps
 
           {/* Right column — Limits */}
           <div className="max-h-[55vh] space-y-3 overflow-y-auto overscroll-contain pl-1 pr-2 max-sm:mt-3 max-sm:border-t max-sm:pt-3">
-            <h4 className="sticky top-0 bg-background pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Limits</h4>
+            <h4 className="sticky top-0 bg-background pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("commonLimits")}</h4>
             <LimitRulesEditor rules={limitRules} onChange={setLimitRules} />
 
             {apiKey.limits.length > 0 ? (
               <div className="space-y-1">
-                <div className="text-xs font-medium text-muted-foreground">Current usage</div>
+                <div className="text-xs font-medium text-muted-foreground">{t("commonCurrentUsage")}</div>
                 <div className="space-y-1">
                   {apiKey.limits.map((limit) => (
                     <LimitUsageBar key={limit.id} limit={limit} />
@@ -211,7 +213,7 @@ function ApiKeyEditForm({ apiKey, busy, onSubmit, onClose }: ApiKeyEditFormProps
 
         <DialogFooter className="mt-4">
           <Button type="submit" disabled={busy || form.formState.isSubmitting}>
-            Save
+            {t("commonSave")}
           </Button>
         </DialogFooter>
       </form>
@@ -262,12 +264,13 @@ function formatTokenCount(n: number): string {
 }
 
 export function ApiKeyEditDialog({ open, busy, apiKey, onOpenChange, onSubmit }: ApiKeyEditDialogProps) {
+  const t = useT();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Edit API key</DialogTitle>
-          <DialogDescription>Update restrictions and lifecycle settings.</DialogDescription>
+          <DialogTitle>{t("apiEditDialogTitle")}</DialogTitle>
+          <DialogDescription>{t("apiEditDialogDescription")}</DialogDescription>
         </DialogHeader>
 
         {apiKey ? (
@@ -279,7 +282,7 @@ export function ApiKeyEditDialog({ open, busy, apiKey, onOpenChange, onSubmit }:
             onClose={() => onOpenChange(false)}
           />
         ) : (
-          <p className="text-sm text-muted-foreground">Select an API key to edit.</p>
+          <p className="text-sm text-muted-foreground">{t("apiEditDialogEmpty")}</p>
         )}
       </DialogContent>
     </Dialog>

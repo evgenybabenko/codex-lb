@@ -215,11 +215,33 @@ def _credits_headers(entries: Iterable[UsageHistory]) -> dict[str, str]:
     }
 
 
-def _normalize_error_code(code: str | None, error_type: str | None) -> str:
+_OVERLOAD_MESSAGE_HINTS = (
+    "selected model is at capacity",
+    "try a different model",
+    "currently overloaded",
+    "server is overloaded",
+    "servers are currently overloaded",
+)
+
+
+def _overload_error_code_from_message(message: str | None) -> str | None:
+    if not message:
+        return None
+    lowered = message.lower()
+    if any(hint in lowered for hint in _OVERLOAD_MESSAGE_HINTS):
+        return "server_is_overloaded"
+    return None
+
+
+def _normalize_error_code(code: str | None, error_type: str | None, message: str | None = None) -> str:
+    overload_code = _overload_error_code_from_message(message)
     value = code or error_type
     if not value:
-        return "upstream_error"
-    return value.lower()
+        return overload_code or "upstream_error"
+    normalized = value.lower()
+    if overload_code is not None and normalized in {"server_error", "upstream_error"}:
+        return overload_code
+    return normalized
 
 
 def _parse_openai_error(payload: OpenAIErrorEnvelope) -> OpenAIError | None:

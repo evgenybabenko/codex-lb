@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RecentRequestsTable } from "@/features/dashboard/components/recent-requests-table";
@@ -73,6 +74,7 @@ describe("RecentRequestsTable", () => {
             reasoningEffort: "high",
             costUsd: 0.01,
             latencyMs: 1000,
+            latencyFirstTokenMs: 240,
           },
         ]}
       />,
@@ -112,8 +114,57 @@ describe("RecentRequestsTable", () => {
     expect(writeText).toHaveBeenCalledWith(longError);
   });
 
-  it("renders empty state", () => {
+  it("collapses inline errors while preserving request diagnostics", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <RecentRequestsTable
+        {...PAGINATION_PROPS}
+        accounts={[]}
+        requests={[
+          {
+            requestedAt: ISO,
+            accountId: "acc-primary",
+            apiKeyName: "Key Alpha",
+            requestId: "req-compact",
+            model: "gpt-5.1",
+            serviceTier: "default",
+            requestedServiceTier: null,
+            actualServiceTier: null,
+            transport: "http",
+            status: "rate_limit",
+            errorCode: "rate_limit_exceeded",
+            errorMessage: "Try again later",
+            tokens: 42,
+            cachedInputTokens: null,
+            reasoningEffort: null,
+            costUsd: 0,
+            latencyMs: 980,
+            latencyFirstTokenMs: 180,
+          },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("switch", { name: "Show inline error details" }));
+
+    expect(screen.getByText("Inline details off")).toBeInTheDocument();
+    expect(screen.queryByText("Try again later")).not.toBeInTheDocument();
+    expect(screen.getByText("rate_limit_exceeded")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "View" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).toContain("Request req-compact");
+    expect(dialog.textContent).toContain("gpt-5.1");
+    expect(dialog.textContent).toContain("980 ms");
+    expect(dialog.textContent).toContain("180 ms");
+    expect(dialog.textContent).toContain("Try again later");
+  });
+
+  it("renders empty state and keeps request-log visibility controls visible", () => {
     render(<RecentRequestsTable {...PAGINATION_PROPS} total={0} accounts={[]} requests={[]} />);
+    expect(screen.getByText("Request log visibility")).toBeInTheDocument();
     expect(screen.getByText("No request logs match the current filters.")).toBeInTheDocument();
   });
 
@@ -141,6 +192,7 @@ describe("RecentRequestsTable", () => {
             reasoningEffort: null,
             costUsd: 0,
             latencyMs: 1,
+            latencyFirstTokenMs: null,
           },
         ]}
       />,
@@ -173,6 +225,7 @@ describe("RecentRequestsTable", () => {
             reasoningEffort: null,
             costUsd: 0,
             latencyMs: 1,
+            latencyFirstTokenMs: null,
           },
         ]}
       />,
