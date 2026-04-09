@@ -7,7 +7,7 @@
 - [x] Просмотрены все `101` доступный форк из GitHub API.
 - [x] По каждому доступному форку создан отдельный отчёт.
 - [x] Источники фич ниже привязаны к конкретным форкам и веткам, а не взяты “с потолка”.
-- [x] Полный список просмотренных форков и ссылки на отчёты есть в [общем индексе](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/README.md).
+- [x] Полный список просмотренных форков и ссылки на отчёты есть в [общем индексе](./README.md).
 - [ ] Ещё `1` форк из общего счётчика GitHub (`102`) был недоступен через API в момент снимка, поэтому по нему отдельный отчёт не построен.
 
 ## Как читать этот файл
@@ -26,9 +26,9 @@
 - Что это даёт простыми словами: сервис реже “теряет нить разговора”, когда пользователь просит продолжить уже начатый ответ.
 - Пример: сейчас длинный диалог может внезапно начать отвечать как будто это новый чат; после внедрения продолжение будет действительно продолжением.
 - Отчёты:
-  - [aaiyer](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/aaiyer__codex-lb.md)
-  - [JoshuaRileyDev](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/JoshuaRileyDev__codex-lb.md)
-  - [xirothedev](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/xirothedev__codex-lb.md)
+  - [aaiyer](./reports/aaiyer__codex-lb.md)
+  - [JoshuaRileyDev](./reports/JoshuaRileyDev__codex-lb.md)
+  - [xirothedev](./reports/xirothedev__codex-lb.md)
 
 ## 2. Лучшая совместимость с реальным OpenAI API
 
@@ -40,9 +40,9 @@
 - Что это даёт простыми словами: меньше странных поломок в Codex CLI, OpenCode и похожих клиентах.
 - Пример: сейчас один клиент может работать, а другой ломаться на потоковой выдаче или аудио; после внедрения меньше таких сюрпризов.
 - Отчёты:
-  - [drvova](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/drvova__codex-lb.md)
-  - [pcy06](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/pcy06__codex-lb.md)
-  - [JordxnBN](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/JordxnBN__codex-lb.md)
+  - [drvova](./reports/drvova__codex-lb.md)
+  - [pcy06](./reports/pcy06__codex-lb.md)
+  - [JordxnBN](./reports/JordxnBN__codex-lb.md)
 
 ## 3. Умное переключение, если аккаунт начал сбоить
 
@@ -54,9 +54,9 @@
 - Что это даёт простыми словами: если один аккаунт начал ломаться, система быстрее уходит на рабочий вариант.
 - Пример: сейчас пользователь может поймать несколько ошибок подряд; после внедрения сервис чаще сам “объезжает” плохой путь.
 - Отчёты:
-  - [kgskr](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/kgskr__codex-lb.md)
-  - [xirothedev](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/xirothedev__codex-lb.md)
-  - [SHAREN](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/SHAREN__codex-lb.md)
+  - [kgskr](./reports/kgskr__codex-lb.md)
+  - [xirothedev](./reports/xirothedev__codex-lb.md)
+  - [SHAREN](./reports/SHAREN__codex-lb.md)
 
 ## 4. Честная и понятная статистика использования
 
@@ -68,9 +68,9 @@
 - Что это даёт простыми словами: панель наконец показывает остатки и расход так, чтобы этому можно было верить.
 - Пример: сейчас диаграмма и реальный остаток могут спорить друг с другом; после внедрения по панели легче понять, когда реально кончается лимит.
 - Отчёты:
-  - [Daltonganger](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/Daltonganger__codex-lb.md)
-  - [svsairevanth](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/svsairevanth__codex-lb.md)
-  - [DOCaCola](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/DOCaCola__codex-lb.md)
+  - [Daltonganger](./reports/Daltonganger__codex-lb.md)
+  - [svsairevanth](./reports/svsairevanth__codex-lb.md)
+  - [DOCaCola](./reports/DOCaCola__codex-lb.md)
 
 ## 5. Более взрослое управление доступами и ключами
 
@@ -82,9 +82,9 @@
 - Что это даёт простыми словами: можно аккуратнее давать доступ людям, не открывая им всю систему целиком.
 - Пример: сейчас сотрудник часто либо видит слишком много, либо слишком мало; после внедрения можно выдавать доступ точнее.
 - Отчёты:
-  - [CesarPetrescu](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/CesarPetrescu__codex-lb.md)
-  - [ins1derft](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/ins1derft__codex-lb.md)
-  - [Daltonganger](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/Daltonganger__codex-lb.md)
+  - [CesarPetrescu](./reports/CesarPetrescu__codex-lb.md)
+  - [ins1derft](./reports/ins1derft__codex-lb.md)
+  - [Daltonganger](./reports/Daltonganger__codex-lb.md)
 
 ## 6. Более полезные логи и контроль видимости запросов
 
@@ -96,9 +96,9 @@
 - Что это даёт простыми словами: проще понять, почему ответ вышел плохим, и при этом не показывать всё всем подряд.
 - Пример: сейчас при жалобе “ответ странный” админ видит мало контекста; после внедрения видно сам запрос, ответ и подробную ошибку.
 - Отчёты:
-  - [josevelaz](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/josevelaz__codex-lb.md)
-  - [pt1-png](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/pt1-png__codex-lb.md)
-  - [L1st3r](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/L1st3r__codex-lb.md)
+  - [josevelaz](./reports/josevelaz__codex-lb.md)
+  - [pt1-png](./reports/pt1-png__codex-lb.md)
+  - [L1st3r](./reports/L1st3r__codex-lb.md)
 
 ## 7. Лучшее управление sticky sessions и маршрутизацией
 
@@ -110,9 +110,9 @@
 - Что это даёт простыми словами: система стабильнее решает, через какой аккаунт вести разговор, и администратору проще чистить старые привязки.
 - Пример: сейчас часть разговоров может “прилипать” слишком долго или вести себя неочевидно; после внедрения поведение будет ровнее и понятнее.
 - Отчёты:
-  - [pcy06](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/pcy06__codex-lb.md)
-  - [L1st3r](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/L1st3r__codex-lb.md)
-  - [JKamsker](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/JKamsker__codex-lb.md)
+  - [pcy06](./reports/pcy06__codex-lb.md)
+  - [L1st3r](./reports/L1st3r__codex-lb.md)
+  - [JKamsker](./reports/JKamsker__codex-lb.md)
   - [our fork](./reports/our-fork__codex-lb.md)
 
 ## 8. Упрощение входа и массового завоза аккаунтов
@@ -125,10 +125,10 @@
 - Что это даёт простыми словами: меньше ручной возни, когда нужно подключить много аккаунтов или обновить вход.
 - Пример: сейчас добавление нескольких аккаунтов повторяет одни и те же шаги; после внедрения это можно делать быстрее и удобнее.
 - Отчёты:
-  - [keksmd](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/keksmd__codex-lb.md)
-  - [mhughdo](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/mhughdo__codex-lb.md)
-  - [pt1-png](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/pt1-png__codex-lb.md)
-  - [azkore](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/azkore__codex-lb.md)
+  - [keksmd](./reports/keksmd__codex-lb.md)
+  - [mhughdo](./reports/mhughdo__codex-lb.md)
+  - [pt1-png](./reports/pt1-png__codex-lb.md)
+  - [azkore](./reports/azkore__codex-lb.md)
 
 ## 9. Более лёгкий запуск на разных платформах
 
@@ -140,10 +140,10 @@
 - Что это даёт простыми словами: меньше проблем при запуске не только локально, но и в разных хостингах.
 - Пример: сейчас на одной платформе всё заводится, а на другой ломается из-за путей или прав; после внедрения таких сюрпризов меньше.
 - Отчёты:
-  - [pt1-png](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/pt1-png__codex-lb.md)
-  - [drvova](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/drvova__codex-lb.md)
-  - [swanwish](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/swanwish__codex-lb.md)
-  - [brahmic](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/brahmic__clb.md)
+  - [pt1-png](./reports/pt1-png__codex-lb.md)
+  - [drvova](./reports/drvova__codex-lb.md)
+  - [swanwish](./reports/swanwish__codex-lb.md)
+  - [brahmic](./reports/brahmic__clb.md)
 
 ## 10. Локализация интерфейса
 
