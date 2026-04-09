@@ -8,9 +8,10 @@ import { useT } from "@/lib/i18n";
 export type CopyButtonProps = {
   value: string;
   label?: string;
+  iconOnly?: boolean;
 };
 
-export function CopyButton({ value, label }: CopyButtonProps) {
+export function CopyButton({ value, label, iconOnly = false }: CopyButtonProps) {
   const t = useT();
   const [copied, setCopied] = useState(false);
 
@@ -26,9 +27,16 @@ export function CopyButton({ value, label }: CopyButtonProps) {
   };
 
   return (
-    <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
-      {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-      {copied ? t("commonCopied") : label ?? t("commonCopy")}
+    <Button
+      type="button"
+      variant="outline"
+      size={iconOnly ? "icon-sm" : "sm"}
+      onClick={handleCopy}
+      aria-label={copied ? `${label ?? t("commonCopy")} ${t("commonCopied")}` : label ?? t("commonCopy")}
+      title={copied ? t("commonCopied") : label ?? t("commonCopy")}
+    >
+      {copied ? <Check className={iconOnly ? "h-4 w-4" : "mr-2 h-4 w-4"} /> : <Copy className={iconOnly ? "h-4 w-4" : "mr-2 h-4 w-4"} />}
+      {iconOnly ? null : copied ? t("commonCopied") : label ?? t("commonCopy")}
     </Button>
   );
 }
