@@ -1,16 +1,30 @@
 # api-keys Specification
 
 ## Purpose
-TBD - created by archiving change admin-auth-and-api-keys. Update Purpose after archive.
+Define the dashboard API-key management and enforcement contract, including key
+creation, regeneration, model restrictions, usage accounting, and settings
+integration.
 ## Requirements
 ### Requirement: API Key creation
 
-The system SHALL allow the admin to create API keys via `POST /api/api-keys` with a `name` (required), `allowed_models` (optional list), `weekly_token_limit` (optional integer), and `expires_at` (optional ISO 8601 datetime). The system MUST generate a key in the format `sk-clb-{48 hex chars}`, store only the `sha256` hash in the database, and return the plain key exactly once in the creation response. The system MUST accept timezone-aware ISO 8601 datetimes for `expiresAt`, normalize them to UTC naive for persistence, and return the expiration as UTC in API responses.
+The system SHALL allow the admin to create API keys via `POST /api/api-keys`
+with a required `name`, optional model restrictions, optional enforced routing
+fields, optional expiration, and optional usage limits.
+
+The public key value MUST use the `sk-clb-` prefix, MUST be stored only as a
+`sha256` hash in the database, and MUST be returned in plain form exactly once
+in the creation response.
+
+The request MAY use legacy `weeklyTokenLimit` or modern `limits` payloads. The
+system MUST accept timezone-aware ISO 8601 datetimes for `expiresAt`,
+normalize them to UTC naive for persistence, and return the expiration as UTC
+in API responses.
 
 #### Scenario: Create key with all options
 
-- **WHEN** admin submits `POST /api/api-keys` with `{ "name": "dev-key", "allowedModels": ["o3-pro"], "weeklyTokenLimit": 1000000, "expiresAt": "2025-12-31T00:00:00Z" }`
-- **THEN** the system returns `{ "id": "<uuid>", "name": "dev-key", "key": "sk-clb-...", "keyPrefix": "sk-clb-a1b2c3d4", "allowedModels": ["o3-pro"], "weeklyTokenLimit": 1000000, "expiresAt": "2025-12-31T00:00:00Z", "createdAt": "..." }` with the plain key visible only in this response
+- **WHEN** admin submits `POST /api/api-keys` with `{ "name": "dev-key", "allowedModels": ["o3-pro"], "limits": [{ "limitType": "total_tokens", "limitWindow": "weekly", "maxValue": 1000000 }], "expiresAt": "2025-12-31T00:00:00Z" }`
+- **THEN** the system returns a key object containing `key`, `keyPrefix`, metadata, and normalized limit rules
+- **AND** the plain key is visible only in this response
 
 #### Scenario: Create key with timezone-aware expiration
 
@@ -21,7 +35,7 @@ The system SHALL allow the admin to create API keys via `POST /api/api-keys` wit
 #### Scenario: Create key with defaults
 
 - **WHEN** admin submits `POST /api/api-keys` with `{ "name": "open-key" }` and no optional fields
-- **THEN** the system creates a key with `allowedModels: null` (all models), `weeklyTokenLimit: null` (unlimited), `expiresAt: null` (no expiration)
+- **THEN** the system creates a key with `allowedModels: null`, no enforced model overrides, no limit rules, and `expiresAt: null`
 
 #### Scenario: Create key with duplicate name
 
@@ -30,7 +44,13 @@ The system SHALL allow the admin to create API keys via `POST /api/api-keys` wit
 
 ### Requirement: API Key listing
 
-The system SHALL expose `GET /api/api-keys` returning all API keys with their metadata. The response MUST NOT include the key hash or plain key. Each key MUST include `id`, `name`, `keyPrefix`, `allowedModels`, `weeklyTokenLimit`, `weeklyTokensUsed`, `weeklyResetAt`, `expiresAt`, `isActive`, `createdAt`, and `lastUsedAt`.
+The system SHALL expose `GET /api/api-keys` returning all API keys with their
+metadata. The response MUST NOT include the key hash or plain key.
+
+Each key MUST include `id`, `name`, `keyPrefix`, `allowedModels`,
+`enforcedModel`, `enforcedReasoningEffort`, `enforcedServiceTier`,
+`expiresAt`, `isActive`, `createdAt`, `lastUsedAt`, `limits`, and optional
+`usageSummary`.
 
 #### Scenario: List keys
 
@@ -44,7 +64,12 @@ The system SHALL expose `GET /api/api-keys` returning all API keys with their me
 
 ### Requirement: API Key update
 
-The system SHALL allow updating key properties via `PATCH /api/api-keys/{id}`. Updatable fields: `name`, `allowedModels`, `weeklyTokenLimit`, `expiresAt`, `isActive`. The key hash and prefix MUST NOT be modifiable. The system MUST accept timezone-aware ISO 8601 datetimes for `expiresAt` and normalize them to UTC naive before persistence.
+The system SHALL allow updating key properties via `PATCH /api/api-keys/{id}`.
+Updatable fields include `name`, `allowedModels`, `enforcedModel`,
+`enforcedReasoningEffort`, `enforcedServiceTier`, `limits`, legacy
+`weeklyTokenLimit`, `expiresAt`, `isActive`, and `resetUsage`. The key hash and
+prefix MUST NOT be modifiable. The system MUST accept timezone-aware ISO 8601
+datetimes for `expiresAt` and normalize them to UTC naive before persistence.
 
 #### Scenario: Update allowed models
 
@@ -83,7 +108,10 @@ The system SHALL allow deleting an API key via `DELETE /api/api-keys/{id}`. Dele
 
 ### Requirement: API Key regeneration
 
-The system SHALL allow regenerating an API key via `POST /api/api-keys/{id}/regenerate`. This MUST generate a new key value (new hash, new prefix) while preserving all other properties (name, models, limits, expiration). The new plain key MUST be returned exactly once.
+The system SHALL allow regenerating an API key via
+`POST /api/api-keys/{id}/regenerate`. This MUST generate a new key value (new
+hash, new prefix) while preserving all other properties (name, restrictions,
+limits, and expiration). The new plain key MUST be returned exactly once.
 
 #### Scenario: Regenerate key
 
@@ -139,6 +167,44 @@ The dependency SHALL raise a domain exception on validation failure. The excepti
 - **WHEN** `api_key_auth_enabled` is false
 - **THEN** the dependency returns `None` and the request proceeds without authentication
 
+### Requirement: API keys can read their own `/v1/usage`
+
+The system SHALL expose `GET /v1/usage` for self-service usage lookup by API-key
+clients. The route MUST require a valid `Authorization: Bearer sk-clb-...`
+header even when `api_key_auth_enabled` is false globally. The response MUST
+include only data for the authenticated key and MUST return `request_count`,
+`total_tokens`, `cached_input_tokens`, `total_cost_usd`, and `limits[]`
+containing `limit_type`, `limit_window`, `max_value`, `current_value`,
+`remaining_value`, `model_filter`, and `reset_at`.
+
+Validation failures MUST use the existing OpenAI error envelope used by
+`/v1/*` routes.
+
+#### Scenario: Missing API key is rejected
+
+- **WHEN** a client calls `GET /v1/usage` without a Bearer token
+- **THEN** the system returns 401 in the OpenAI error format
+
+#### Scenario: Invalid API key is rejected
+
+- **WHEN** a client calls `GET /v1/usage` with an unknown, expired, or inactive Bearer key
+- **THEN** the system returns 401 in the OpenAI error format
+
+#### Scenario: Key with no usage returns zero totals
+
+- **WHEN** a valid API key with no request-log usage calls `GET /v1/usage`
+- **THEN** the system returns `request_count: 0`, `total_tokens: 0`, `cached_input_tokens: 0`, `total_cost_usd: 0.0`
+
+#### Scenario: Usage is scoped to the authenticated key
+
+- **WHEN** multiple API keys have request-log history and one of them calls `GET /v1/usage`
+- **THEN** the response includes only the usage totals and limits for that authenticated key
+
+#### Scenario: Self-usage works while global proxy auth is disabled
+
+- **WHEN** `api_key_auth_enabled` is false and a client calls `GET /v1/usage` with a valid Bearer key
+- **THEN** the system still authenticates that key and returns the self-usage payload
+
 ### Requirement: Model restriction enforcement
 
 The system SHALL enforce per-key model restrictions in the proxy service layer (not middleware). When `allowed_models` is set (non-null, non-empty) and the requested model is not in the list, the system MUST reject the request. The `/v1/models` endpoint MUST filter the model list based on the authenticated key's `allowed_models`.
@@ -169,6 +235,26 @@ For fixed-model endpoints such as `/v1/audio/transcriptions` and `/backend-api/t
 
 - **WHEN** a key has `allowed_models: ["gpt-5.1"]` and a request is made to `/v1/audio/transcriptions` or `/backend-api/transcribe`
 - **THEN** the proxy returns 403 with OpenAI-format error code `model_not_allowed` for model `gpt-4o-transcribe`
+
+### Requirement: API keys can enforce a service tier
+
+The dashboard API key CRUD surface MUST allow callers to persist an optional
+enforced service tier. The service MUST normalize `fast` to the canonical
+upstream value `priority` before persistence and before returning the API key
+payload.
+
+#### Scenario: Create API key with fast service tier alias
+
+- **WHEN** a dashboard client creates an API key with `enforcedServiceTier: "fast"`
+- **THEN** the request is accepted
+- **AND** the persisted API key stores the canonical value `priority`
+- **AND** the response returns `enforcedServiceTier: "priority"`
+
+#### Scenario: Update API key with canonical service tier
+
+- **WHEN** a dashboard client updates an API key with `enforcedServiceTier: "flex"`
+- **THEN** the persisted API key stores `flex`
+- **AND** subsequent reads return `flex`
 
 ### Requirement: Weekly token usage tracking
 
@@ -245,6 +331,12 @@ When computing API key `cost_usd` usage, the system MUST price requests using th
 #### Scenario: Standard-tier request keeps standard pricing
 - **WHEN** an authenticated request for the same model is finalized without `service_tier`
 - **THEN** the system computes `cost_usd` using the standard-tier rate
+
+#### Scenario: Requested and actual tiers differ
+- **WHEN** a priced request is sent with `requested_service_tier: "priority"`
+- **AND** the upstream reports `actual_service_tier: "default"`
+- **THEN** the persisted billable `service_tier` is `default`
+- **AND** API key cost accounting uses the `default` tier rate for that request
 
 ### Requirement: gpt-5.4 pricing is recognized
 The system MUST recognize `gpt-5.4` pricing when computing request costs. For standard-tier requests with more than 272K input tokens, the system MUST apply the published higher long-context rates.
@@ -373,87 +465,108 @@ This predicate SHALL be applied consistently across `/api/models`, `/v1/models`,
 - **GIVEN** any model registry state
 - **THEN** `/api/models`, `/v1/models`, and `/backend-api/codex/models` expose the same set of models
 
-### Requirement: Reservation 정산 exactly-once 보장
+### Requirement: Reservation settlement is exactly-once
 
-Usage reservation의 최종 정산(finalize 또는 release)은 요청 단위에서 정확히 1회 수행되어야 한다. 재시도 가능한 중간 attempt에서는 정산을 defer하고, 요청 종료 시점에서 단일 지점이 정산 책임을 갖는다. 시스템은 이 동작을 SHALL 보장해야 한다.
+The system MUST settle each usage reservation exactly once per request, whether
+through `finalize` or `release`. Retryable intermediate attempts MUST defer
+settlement, and one final completion point MUST own the settlement
+responsibility for that request.
 
-#### Scenario: 스트림 401 → refresh retry 성공 시 finalize 1회
+#### Scenario: Stream 401 then refresh retry succeeds with one finalize
 
-- **WHEN** 첫 `_stream_once()` attempt에서 401을 수신하고 계정 refresh 후 재시도가 성공하면
-- **THEN** 첫 attempt에서는 reservation 정산이 수행되지 않아야 한다 (SHALL)
-- **AND** 최종 성공 시점에서 `finalize_usage_reservation()`이 정확히 1회 호출되어야 한다 (SHALL)
-- **AND** 실제 token 사용량이 quota에 반영되어야 한다 (SHALL)
+- **WHEN** the first `_stream_once()` attempt receives `401` and a retry after
+  account refresh succeeds
+- **THEN** the first attempt does not settle the reservation (SHALL)
+- **AND** `finalize_usage_reservation()` is called exactly once at final success
+  (SHALL)
+- **AND** the actual token usage is applied to quota state (SHALL)
 
-#### Scenario: 스트림 401 → retry 소진 실패 시 release 1회
+#### Scenario: Stream 401 then retries exhaust with one release
 
-- **WHEN** 401 후 재시도를 모두 소진하여 요청이 최종 실패하면
-- **THEN** `release_usage_reservation()`이 정확히 1회 호출되어야 한다 (SHALL)
-- **AND** 예약된 quota가 원복되어야 한다 (SHALL)
+- **WHEN** the request ultimately fails after exhausting retries following a
+  `401`
+- **THEN** `release_usage_reservation()` is called exactly once (SHALL)
+- **AND** the reserved quota is restored (SHALL)
 
-#### Scenario: 스트림 성공 시 finalize 1회
+#### Scenario: Stream success finalizes once
 
-- **WHEN** `_stream_once()`가 retry 없이 첫 attempt에서 성공하면
-- **THEN** `finalize_usage_reservation()`이 정확히 1회 호출되어야 한다 (SHALL)
+- **WHEN** `_stream_once()` succeeds on the first attempt without retries
+- **THEN** `finalize_usage_reservation()` is called exactly once (SHALL)
 
-### Requirement: 조기 종료 경로에서 reservation release 보장
+### Requirement: Early-exit paths release reservations
 
-Reservation 생성 후 upstream API 호출에 진입하지 않고 종료되는 모든 경로에서 reservation이 release되어야 한다. `reserved` 상태로 남는 reservation이 존재하면 안 된다. 시스템은 이 동작을 SHALL 보장해야 한다.
+The system MUST release a reservation on every path that exits after creating
+that reservation but before entering the upstream API call. No reservation may
+remain in a `reserved` state after such an early exit.
 
-#### Scenario: no_accounts 즉시 종료 시 release
+#### Scenario: Immediate no-accounts exit releases reservation
 
-- **WHEN** reservation 생성 후 `_stream_with_retry()`가 사용 가능한 계정 없음(`no_accounts`)으로 즉시 종료되면
-- **THEN** `release_usage_reservation()`이 호출되어 reservation이 `released` 상태로 전이되어야 한다 (SHALL)
-- **AND** pre-reserved quota가 원복되어야 한다 (SHALL)
+- **WHEN** `_stream_with_retry()` exits immediately with `no_accounts` after
+  creating a reservation
+- **THEN** `release_usage_reservation()` is called and the reservation moves to
+  `released` (SHALL)
+- **AND** the pre-reserved quota is restored (SHALL)
 
-#### Scenario: 재시도 소진 후 no_accounts 종료 시 release
+#### Scenario: No-accounts exit after retry exhaustion releases reservation
 
-- **WHEN** 재시도 루프가 모든 attempt를 소진한 후 `no_accounts`로 종료되면
-- **THEN** `release_usage_reservation()`이 호출되어야 한다 (SHALL)
+- **WHEN** the retry loop exhausts every attempt and then exits with
+  `no_accounts`
+- **THEN** `release_usage_reservation()` is called (SHALL)
 
-#### Scenario: reservation 미생성 시 정산 스킵
+#### Scenario: Settlement is skipped when no reservation exists
 
-- **WHEN** API key auth가 비활성이거나 reservation이 생성되지 않은 상태에서 요청이 종료되면
-- **THEN** 정산 로직이 안전하게 스킵되어야 하며 에러가 발생하지 않아야 한다 (SHALL)
+- **WHEN** a request exits while API-key auth is disabled or no reservation was
+  created
+- **THEN** the settlement logic safely skips cleanup without raising an error
+  (SHALL)
 
-### Requirement: Compact 경로 예외 무관 reservation cleanup
+### Requirement: Compact path always cleans up reservations
 
-`_compact_responses()` 경로에서 reservation이 존재할 때, 어떤 예외 타입이 발생하더라도 reservation이 정리되어야 한다. 특정 예외 타입에만 의존하는 cleanup은 허용되지 않는다. 시스템은 이 동작을 SHALL 보장해야 한다.
+When a reservation exists in `_compact_responses()`, the reservation MUST be
+cleaned up regardless of which exception type is raised. Cleanup MUST NOT rely
+on handling only one specific exception class.
 
-#### Scenario: ProxyResponseError 발생 시 release
+#### Scenario: ProxyResponseError releases reservation
 
-- **WHEN** `compact_responses()`에서 `ProxyResponseError`가 발생하면
-- **THEN** reservation이 release되어야 한다 (SHALL)
+- **WHEN** `compact_responses()` raises `ProxyResponseError`
+- **THEN** the reservation is released (SHALL)
 
-#### Scenario: 예상 외 런타임 예외 발생 시 release
+#### Scenario: Unexpected runtime exception also releases reservation
 
-- **WHEN** `compact_responses()`에서 `ProxyResponseError` 외의 예외(`Exception`)가 발생하면
-- **THEN** reservation이 동일하게 release되어야 한다 (SHALL)
+- **WHEN** `compact_responses()` raises an exception other than
+  `ProxyResponseError`
+- **THEN** the reservation is released in the same way (SHALL)
 
-#### Scenario: compact 성공 시 finalize
+#### Scenario: Compact success finalizes reservation
 
-- **WHEN** `compact_responses()`가 정상 완료되면
-- **THEN** `finalize_usage_reservation()`이 호출되어야 한다 (SHALL)
+- **WHEN** `compact_responses()` completes successfully
+- **THEN** `finalize_usage_reservation()` is called (SHALL)
 
-### Requirement: Finalize / Release 멱등성
+### Requirement: Finalize and release are idempotent
 
-`finalize_usage_reservation()`과 `release_usage_reservation()`은 이미 정산된(finalized 또는 released) reservation에 대해 안전하게 no-op 처리되어야 한다. 이중 호출이 quota를 이중 반영하거나 에러를 발생시키면 안 된다. 시스템은 이 동작을 SHALL 보장해야 한다.
+`finalize_usage_reservation()` and `release_usage_reservation()` MUST behave as
+safe no-ops when the reservation was already settled, whether `finalized` or
+`released`. Double calls MUST NOT double-apply quota changes or raise errors.
 
-#### Scenario: finalize 후 release 호출 시 no-op
+#### Scenario: Release after finalize is a no-op
 
-- **WHEN** reservation이 이미 `finalized` 상태에서 `release_usage_reservation()`이 호출되면
-- **THEN** 아무 동작 없이 반환되어야 한다 (SHALL)
-- **AND** quota 값이 변경되지 않아야 한다 (SHALL)
+- **WHEN** `release_usage_reservation()` is called for a reservation already in
+  `finalized` state
+- **THEN** it returns without additional work (SHALL)
+- **AND** quota values remain unchanged (SHALL)
 
-#### Scenario: release 후 finalize 호출 시 no-op
+#### Scenario: Finalize after release is a no-op
 
-- **WHEN** reservation이 이미 `released` 상태에서 `finalize_usage_reservation()`이 호출되면
-- **THEN** 아무 동작 없이 반환되어야 한다 (SHALL)
-- **AND** quota 값이 변경되지 않아야 한다 (SHALL)
+- **WHEN** `finalize_usage_reservation()` is called for a reservation already in
+  `released` state
+- **THEN** it returns without additional work (SHALL)
+- **AND** quota values remain unchanged (SHALL)
 
-#### Scenario: 동일 finalize 이중 호출 시 1회만 반영
+#### Scenario: Duplicate finalize applies usage only once
 
-- **WHEN** 동일 `reservation_id`로 `finalize_usage_reservation()`이 2회 호출되면
-- **THEN** 사용량은 정확히 1회만 반영되어야 한다 (SHALL)
+- **WHEN** `finalize_usage_reservation()` is called twice for the same
+  `reservation_id`
+- **THEN** usage is applied exactly once (SHALL)
 
 ### Requirement: gpt-5.4-mini pricing is recognized
 

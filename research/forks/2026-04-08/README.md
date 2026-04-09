@@ -11,6 +11,7 @@
 
 - [Топ фич и что реально улучшит использование](./top-features.md)
 - [Единый чек-лист: просмотрено / хотим / уже у нас](./feature-decision-checklist.md)
+- [Чек-лист по форкам: проверен / берём / уже у нас](./fork-review-checklist.md)
 - [База сравнения с нашим develop](./baseline-evgenybabenko-develop.md)
 
 ## Что важно в двух строках

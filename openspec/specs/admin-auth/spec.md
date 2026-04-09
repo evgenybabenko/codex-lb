@@ -1,7 +1,8 @@
 # admin-auth Specification
 
 ## Purpose
-TBD - created by archiving change admin-auth-and-api-keys. Update Purpose after archive.
+Define the dashboard authentication contract for password setup and login,
+TOTP, session validation, login rate limiting, and the frontend auth gate.
 ## Requirements
 ### Requirement: Password setup
 
@@ -21,6 +22,52 @@ The system SHALL allow the admin to set a password from the settings page when n
 
 - **WHEN** admin submits a password shorter than 8 characters
 - **THEN** the system returns 422 with a validation error
+
+### Requirement: Remote first-time password setup requires bootstrap token
+
+The system SHALL support optional environment variable
+`CODEX_LB_DASHBOARD_BOOTSTRAP_TOKEN` for protecting remote first-time dashboard
+password setup.
+
+When no dashboard password is configured, a bootstrap token is configured, and
+the request is determined to be remote,
+`POST /api/dashboard-auth/password/setup` MUST require request body field
+`bootstrapToken` to exactly match the configured token.
+
+When the same request is local (loopback / localhost), first-time password
+setup MUST remain allowed without a bootstrap token.
+
+#### Scenario: Remote first-time setup rejected without bootstrap token
+
+- **GIVEN** `password_hash` is NULL
+- **AND** `CODEX_LB_DASHBOARD_BOOTSTRAP_TOKEN="secret-bootstrap"`
+- **AND** the request is remote
+- **WHEN** client submits `POST /api/dashboard-auth/password/setup` with `{ "password": "password123" }`
+- **THEN** the system returns `400` with error code `bootstrap_token_required`
+
+#### Scenario: Remote first-time setup rejected with invalid bootstrap token
+
+- **GIVEN** `password_hash` is NULL
+- **AND** `CODEX_LB_DASHBOARD_BOOTSTRAP_TOKEN="secret-bootstrap"`
+- **AND** the request is remote
+- **WHEN** client submits `POST /api/dashboard-auth/password/setup` with `{ "password": "password123", "bootstrapToken": "wrong" }`
+- **THEN** the system returns `400` with error code `invalid_bootstrap_token`
+
+#### Scenario: Remote first-time setup succeeds with valid bootstrap token
+
+- **GIVEN** `password_hash` is NULL
+- **AND** `CODEX_LB_DASHBOARD_BOOTSTRAP_TOKEN="secret-bootstrap"`
+- **AND** the request is remote
+- **WHEN** client submits `POST /api/dashboard-auth/password/setup` with `{ "password": "password123", "bootstrapToken": "secret-bootstrap" }`
+- **THEN** the system stores the password hash and returns a valid dashboard session response
+
+#### Scenario: Local first-time setup remains token-free
+
+- **GIVEN** `password_hash` is NULL
+- **AND** `CODEX_LB_DASHBOARD_BOOTSTRAP_TOKEN="secret-bootstrap"`
+- **AND** the request is local
+- **WHEN** client submits `POST /api/dashboard-auth/password/setup` with `{ "password": "password123" }`
+- **THEN** the system stores the password hash without requiring `bootstrapToken`
 
 ### Requirement: Password login
 
@@ -153,6 +200,26 @@ The system SHALL expose `GET /api/dashboard-auth/session` returning the current 
 - **WHEN** session has `pw=true, tv=false` and `totp_required_on_login` is true
 - **THEN** the response contains `{ "passwordRequired": true, "authenticated": false, "totpRequiredOnLogin": true, "totpConfigured": true }`
 
+### Requirement: Session endpoint reports bootstrap token requirement
+
+The session endpoint SHALL expose whether the current client must provide a
+bootstrap token for first-time password setup.
+
+`GET /api/dashboard-auth/session` MUST include boolean
+`bootstrapTokenRequired`.
+
+When a password is already configured, or when no bootstrap token is
+configured, or when the request is local, `bootstrapTokenRequired` MUST be
+`false`.
+
+#### Scenario: Remote client sees bootstrap token requirement before first setup
+
+- **GIVEN** `password_hash` is NULL
+- **AND** `CODEX_LB_DASHBOARD_BOOTSTRAP_TOKEN="secret-bootstrap"`
+- **AND** the request is remote
+- **WHEN** client calls `GET /api/dashboard-auth/session`
+- **THEN** the response contains `{ "passwordRequired": false, "authenticated": true, "bootstrapTokenRequired": true, ... }`
+
 ### Requirement: TOTP setup requires password session
 
 The system SHALL require a valid password-authenticated session (not the `X-Codex-LB-Setup-Token` header) for TOTP setup and disable operations. The `CODEX_LB_DASHBOARD_SETUP_TOKEN` environment variable and `X-Codex-LB-Setup-Token` header validation MUST be removed.
@@ -231,4 +298,3 @@ The SPA SHALL check `GET /api/dashboard-auth/session` on load. When `passwordReq
 
 - **WHEN** the SPA loads and the session endpoint returns `passwordRequired: false`
 - **THEN** the full dashboard UI is shown immediately
-

@@ -107,11 +107,30 @@ The service MUST accept Responses requests that include tools with type `web_sea
 - **THEN** the service returns a 4xx response with an OpenAI invalid_request_error indicating the unsupported tool type
 
 ### Requirement: Preserve supported service_tier values
-When a Responses request includes `service_tier`, the service MUST preserve that field in the normalized upstream payload instead of dropping or rewriting it locally.
+When a Responses request includes `service_tier`, the service MUST preserve that
+field in the normalized upstream payload instead of dropping it locally unless
+an authenticated API key enforces a different tier.
 
 #### Scenario: Responses request includes fast-mode tier
 - **WHEN** a client sends a valid Responses request with `service_tier: "priority"`
 - **THEN** the service accepts the request and forwards `service_tier: "priority"` upstream unchanged
+
+### Requirement: API key service tier enforcement applies to upstream Responses requests
+
+When an API key carries an enforced service tier, the proxy MUST override any
+incoming Responses request service tier with that enforced value before
+forwarding upstream. The legacy alias `fast` MUST be treated as `priority`.
+
+#### Scenario: Enforced service tier overrides the request payload
+
+- **WHEN** an API key is configured with `enforcedServiceTier: "priority"`
+- **AND** an incoming Responses request asks for `service_tier: "default"`
+- **THEN** the forwarded upstream payload uses `service_tier: "priority"`
+
+#### Scenario: Fast alias is applied as priority
+
+- **WHEN** an API key is configured with `enforcedServiceTier: "fast"`
+- **THEN** the forwarded upstream payload uses the canonical value `priority`
 
 ### Requirement: Inline input_image URLs when possible
 When a request includes `input_image` parts with HTTP(S) URLs, the service MUST attempt to fetch the image and replace the URL with a data URL if the image is within size limits. If the image cannot be fetched or exceeds size limits, the service MUST preserve the original URL and allow upstream to handle the error.
@@ -172,7 +191,17 @@ Before forwarding Responses payloads upstream, the service MUST remove known uns
 - **THEN** the service preserves that field in forwarded payload
 
 ### Requirement: Use prompt_cache_key as OpenAI cache affinity
-For OpenAI-style `/v1/responses`, `/v1/responses/compact`, and chat-completions requests mapped onto Responses, the service MUST treat a non-empty `prompt_cache_key` as a bounded upstream account affinity key for prompt-cache correctness. This affinity MUST apply even when dashboard `sticky_threads_enabled` is disabled, the service MUST continue forwarding the same `prompt_cache_key` upstream unchanged, and the stored affinity MUST expire after the configured freshness window so older keys can rebalance. The freshness window MUST come from dashboard settings so operators can adjust it without restart.
+The service MUST treat a non-empty
+`prompt_cache_key` as a bounded upstream account affinity key for OpenAI-style
+`/v1/responses`, `/v1/responses/compact`, and chat-completions requests mapped
+onto Responses for prompt-cache
+correctness. This affinity MUST apply even when dashboard
+`sticky_threads_enabled` is disabled, the service MUST continue forwarding the
+same `prompt_cache_key` upstream unchanged, and the stored affinity MUST expire
+after the configured freshness window so older keys can rebalance. The
+freshness window MUST come from dashboard settings so operators can adjust it
+without restart. OpenAI-style route wiring MUST NOT upgrade these requests to
+durable `codex_session` affinity solely because a session header is present.
 
 #### Scenario: recent /v1 responses request reuses prompt-cache affinity
 - **WHEN** a client sends repeated `/v1/responses` requests with the same non-empty `prompt_cache_key` while `sticky_threads_enabled` is disabled
@@ -192,6 +221,11 @@ For OpenAI-style `/v1/responses`, `/v1/responses/compact`, and chat-completions 
 #### Scenario: dashboard prompt-cache affinity TTL is applied
 - **WHEN** an operator updates the dashboard prompt-cache affinity TTL
 - **THEN** subsequent OpenAI-style prompt-cache affinity decisions use the new freshness window
+
+#### Scenario: OpenAI-style route ignores session header for durable codex-session pinning
+- **WHEN** a client sends `/v1/responses` or `/v1/responses/compact` with a non-empty `session_id` header and no explicit sticky-thread mode
+- **THEN** the service does not persist a durable `codex_session` mapping solely from that header
+- **AND** bounded prompt-cache affinity behavior remains in effect
 
 ### Requirement: HTTP Responses routes preserve upstream websocket session continuity
 When serving HTTP `/v1/responses` or HTTP `/backend-api/codex/responses`, the service MUST preserve upstream Responses websocket session continuity on a stable per-session bridge key instead of opening a brand new upstream session for every eligible request. The bridge key MUST use an explicit session/conversation header when present; otherwise it MUST use normalized `prompt_cache_key`, and when the client omits `prompt_cache_key` the service MUST derive a stable key from the same cache-affinity inputs already used for OpenAI prompt-cache routing. While bridged, the service MUST preserve the external HTTP/SSE contract, MUST continue request logging with `transport = "http"`, and MUST keep requests from different bridge keys isolated from one another.
@@ -340,15 +374,31 @@ Before forwarding requests to the upstream Responses endpoint, the service MUST 
 - **THEN** those headers are not forwarded to upstream
 
 ### Requirement: Codex backend session_id preserves account affinity
-When a backend Codex Responses or compact request includes a non-empty `session_id` header, the service MUST use that value as the routing affinity key for upstream account selection. This affinity MUST apply even when dashboard `sticky_threads_enabled` is disabled.
+The service MUST use a non-empty accepted session header as the routing
+affinity key for upstream account selection on backend Codex Responses or
+compact requests. This affinity MUST apply even when dashboard
+`sticky_threads_enabled` is disabled. Accepted session headers are
+`session_id`, `x-codex-session-id`, and `x-codex-conversation-id`, in that
+priority order. If the request lacks a client-supplied `prompt_cache_key`, the
+service MUST derive and attach a stable `prompt_cache_key` before upstream
+forwarding so account affinity and upstream prompt-cache routing can coexist.
 
 #### Scenario: Codex Responses request with session_id and sticky threads disabled
 - **WHEN** `/backend-api/codex/responses` is called with a non-empty `session_id` header and `sticky_threads_enabled=false`
 - **THEN** the selected upstream account is pinned to that `session_id` for later backend Codex requests on the same thread
 
+#### Scenario: Backend Codex request derives prompt_cache_key before codex-session routing
+- **WHEN** `/backend-api/codex/responses` is called with `session_id` and without `prompt_cache_key`
+- **THEN** the routing decision still uses durable `codex_session` affinity for account selection
+- **AND** the forwarded upstream payload includes a derived stable `prompt_cache_key`
+
 #### Scenario: Compact request reuses pinned Codex session account
 - **WHEN** `/backend-api/codex/responses/compact` is called with the same non-empty `session_id` header after routing preferences change
 - **THEN** the service reuses the previously pinned upstream account for that thread instead of reallocating to a different account
+
+#### Scenario: Header alias priority is deterministic
+- **WHEN** a backend Codex request includes multiple accepted session header aliases
+- **THEN** the service uses `session_id` first, otherwise `x-codex-session-id`, otherwise `x-codex-conversation-id`
 
 #### Scenario: Compact retry uses refreshed provider account identity
 - **WHEN** a pinned backend Codex compact request gets a `401` from upstream, refreshes the selected account, and retries
@@ -419,6 +469,26 @@ The service MUST persist a stable `transport` value on `request_logs` for Respon
 - **WHEN** a client completes a Responses request over WebSocket on `/backend-api/codex/responses` or `/v1/responses`
 - **THEN** the persisted request log has `transport = "websocket"`
 - **AND** `/api/request-logs` returns that row with `transport = "websocket"`
+
+### Requirement: Request logs persist requested, actual, and billable service tiers separately
+
+For Responses proxy traffic, the system MUST persist the operator-requested
+tier, the upstream-reported actual tier when available, and the effective
+billable tier used for pricing as separate request-log fields.
+
+#### Scenario: Upstream reports a downgraded actual tier
+- **WHEN** a client sends a Responses request with `service_tier: "priority"`
+- **AND** the upstream response later reports `service_tier: "default"`
+- **THEN** the persisted request log entry records `requested_service_tier = "priority"`
+- **AND** the persisted request log entry records `actual_service_tier = "default"`
+- **AND** the persisted request log entry records billable `service_tier = "default"`
+
+#### Scenario: Upstream omits the actual tier
+- **WHEN** a client sends a Responses request with `service_tier: "priority"`
+- **AND** the upstream response omits `service_tier`
+- **THEN** the persisted request log entry records `requested_service_tier = "priority"`
+- **AND** the persisted request log entry records `actual_service_tier = null`
+- **AND** the persisted request log entry records billable `service_tier = "priority"`
 
 ### Requirement: Emit opt-in safe service-tier trace logs
 When service-tier trace logging is enabled, the service MUST emit a diagnostic log entry for Responses requests that records `request_id`, request `kind`, `requested_service_tier`, and upstream `actual_service_tier`. The diagnostic log MUST NOT include prompt text, input content, or the full request payload.

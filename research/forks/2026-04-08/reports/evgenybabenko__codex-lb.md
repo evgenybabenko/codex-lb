@@ -4,7 +4,7 @@
 - Снимок: `2026-04-08`
 - Default branch: `main`
 - Создан форк: `2026-04-04T08:48:44Z`
-- Последний push: `2026-04-04T17:49:50Z`
+- Последний push: `2026-04-08T13:07:10Z`
 - Веток в форке: `22`
 - Оценка полезности: `High`
 
@@ -45,7 +45,7 @@
 
 ## Default branch vs наш develop
 
-- Статус: ahead, ahead 9, behind 0.
+- Статус: diverged, ahead 9, behind 1.
 - Helm и деплой: external DB secrets guide, ServiceMonitor alternatives, production deployment guide; configurable service, db-init hook, global nodeSelector, enhanced tests.
 - Dashboard и UX: lowercase Trivy image-ref and bump all actions to latest; use exact tag v8.0.0 for setup-uv (no v8 major tag exists).
 - Usage, квоты и тарификация: lowercase Trivy image-ref and bump all actions to latest; use exact tag v8.0.0 for setup-uv (no v8 major tag exists).
