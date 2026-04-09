@@ -113,7 +113,7 @@
   - [pcy06](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/pcy06__codex-lb.md)
   - [L1st3r](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/L1st3r__codex-lb.md)
   - [JKamsker](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/JKamsker__codex-lb.md)
-  - [evgenybabenko](/Users/evgenybabenko/Develop/_Projects/codex-lb/research/forks/2026-04-08/reports/evgenybabenko__codex-lb.md)
+  - [our fork](./reports/our-fork__codex-lb.md)
 
 ## 8. Упрощение входа и массового завоза аккаунтов
 

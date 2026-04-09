@@ -25,7 +25,7 @@
 
 - [pt1-png/codex-lb](./reports/pt1-png__codex-lb.md) — `High`; default ahead `13`; доп. веток `0`. add cache mount IDs for Railway compatibility; remove cache mounts for Railway compatibility
 - [drvova/codex-lb](./reports/drvova__codex-lb.md) — `High`; default ahead `11`; доп. веток `0`. align API schemas with official OpenAI wire format + add mitmdump capture tooling; resolve duplicate fields, hardcoded IDs, and add transcription schemas
-- [evgenybabenko/codex-lb](./reports/evgenybabenko__codex-lb.md) — `High`; default ahead `8`; доп. веток `18`. add workspace-aware account identity; cache and display workspace metadata
+- [evgenybabenko/codex-lb](./reports/our-fork__codex-lb.md) — `High`; default ahead `8`; доп. веток `18`. add workspace-aware account identity; cache and display workspace metadata
 - [xirothedev/codex-lb](./reports/xirothedev__codex-lb.md) — `High`; default ahead `8`; доп. веток `1`. add self-service portal and viewer dashboard; add branch image workflow
 - [CesarPetrescu/codex-lb](./reports/CesarPetrescu__codex-lb.md) — `High`; default ahead `7`; доп. веток `2`. enforce admin-token access and expand API key management; add full admin API usage runbook
 - [swanwish/codex-lb](./reports/swanwish__codex-lb.md) — `High`; default ahead `7`; доп. веток `0`. add macOS executable build flow; use supported Intel macOS runners
@@ -50,7 +50,7 @@
 |---|---:|---:|---:|---|---|
 | `pt1-png/codex-lb` | `High` | `13` | `0` | [report](./reports/pt1-png__codex-lb.md) | add cache mount IDs for Railway compatibility; remove cache mounts for Railway compatibility |
 | `drvova/codex-lb` | `High` | `11` | `0` | [report](./reports/drvova__codex-lb.md) | align API schemas with official OpenAI wire format + add mitmdump capture tooling; resolve duplicate fields, hardcoded IDs, and add transcription schemas |
-| `evgenybabenko/codex-lb` | `High` | `8` | `18` | [report](./reports/evgenybabenko__codex-lb.md) | add workspace-aware account identity; cache and display workspace metadata |
+| `evgenybabenko/codex-lb` | `High` | `8` | `18` | [report](./reports/our-fork__codex-lb.md) | add workspace-aware account identity; cache and display workspace metadata |
 | `xirothedev/codex-lb` | `High` | `8` | `1` | [report](./reports/xirothedev__codex-lb.md) | add self-service portal and viewer dashboard; add branch image workflow |
 | `CesarPetrescu/codex-lb` | `High` | `7` | `2` | [report](./reports/CesarPetrescu__codex-lb.md) | enforce admin-token access and expand API key management; add full admin API usage runbook |
 | `swanwish/codex-lb` | `High` | `7` | `0` | [report](./reports/swanwish__codex-lb.md) | add macOS executable build flow; use supported Intel macOS runners |
