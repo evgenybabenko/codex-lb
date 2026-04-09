@@ -13,6 +13,7 @@ from app.core.balancer import (
     AccountState,
     RoutingStrategy,
     SelectionResult,
+    WeeklyResetPreference,
     handle_permanent_failure,
     handle_quota_exceeded,
     handle_rate_limit,
@@ -30,6 +31,7 @@ from app.core.utils.time import utcnow
 from app.db.models import Account, AccountStatus, AdditionalUsageHistory, StickySessionKind, UsageHistory
 from app.modules.proxy.account_cache import get_account_selection_cache
 from app.modules.proxy.additional_model_limits import get_additional_quota_key_for_model_id
+from app.modules.proxy.recent_session_assignments_repository import RecentSessionAssignmentsRepository
 from app.modules.proxy.repo_bundle import ProxyRepoFactory, ProxyRepositories
 from app.modules.usage.additional_quota_keys import canonicalize_additional_quota_key
 
@@ -49,6 +51,7 @@ _RECOVERABLE_STATUSES = frozenset(
         AccountStatus.QUOTA_EXCEEDED,
     }
 )
+_RECENT_SESSION_ASSIGNMENT_TTL_MULTIPLIER = 4
 
 NO_PLAN_SUPPORT_FOR_MODEL = "no_plan_support_for_model"
 ADDITIONAL_QUOTA_DATA_UNAVAILABLE = "additional_quota_data_unavailable"
@@ -101,12 +104,16 @@ class LoadBalancer:
         sticky_kind: StickySessionKind | None = None,
         reallocate_sticky: bool = False,
         sticky_max_age_seconds: int | None = None,
-        prefer_earlier_reset_accounts: bool = False,
+        weekly_reset_preference: WeeklyResetPreference = "disabled",
+        prioritize_full_weekly_capacity: bool = True,
         routing_strategy: RoutingStrategy = "capacity_weighted",
         model: str | None = None,
         additional_limit_name: str | None = None,
         exclude_account_ids: Collection[str] | None = None,
         budget_threshold_pct: float = 95.0,
+        spread_new_codex_sessions: bool = False,
+        spread_new_codex_sessions_window_seconds: int = 60,
+        spread_new_codex_sessions_top_pool_size: int = 5,
     ) -> AccountSelection:
         excluded_ids = set(exclude_account_ids or ())
 
@@ -159,7 +166,8 @@ class LoadBalancer:
 
                 result = select_account(
                     states,
-                    prefer_earlier_reset=prefer_earlier_reset_accounts,
+                    weekly_reset_preference=weekly_reset_preference,
+                    prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
                     routing_strategy=routing_strategy,
                 )
 
@@ -294,9 +302,14 @@ class LoadBalancer:
                         reallocate_sticky=reallocate_sticky,
                         sticky_max_age_seconds=sticky_max_age_seconds,
                         budget_threshold_pct=budget_threshold_pct,
-                        prefer_earlier_reset_accounts=prefer_earlier_reset_accounts,
+                        weekly_reset_preference=weekly_reset_preference,
+                        prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
                         routing_strategy=routing_strategy,
                         sticky_repo=repos.sticky_sessions,
+                        recent_assignments_repo=repos.recent_session_assignments,
+                        spread_new_codex_sessions=spread_new_codex_sessions,
+                        spread_window_seconds=spread_new_codex_sessions_window_seconds,
+                        spread_top_pool_size=spread_new_codex_sessions_top_pool_size,
                     )
                     selected_account_map = account_map
                     selected_states = []
@@ -602,14 +615,20 @@ class LoadBalancer:
         reallocate_sticky: bool,
         sticky_max_age_seconds: int | None,
         budget_threshold_pct: float = 95.0,
-        prefer_earlier_reset_accounts: bool,
+        weekly_reset_preference: WeeklyResetPreference,
+        prioritize_full_weekly_capacity: bool,
         routing_strategy: RoutingStrategy,
         sticky_repo: StickySessionsRepository | None,
+        recent_assignments_repo: RecentSessionAssignmentsRepository | None,
+        spread_new_codex_sessions: bool,
+        spread_window_seconds: int,
+        spread_top_pool_size: int,
     ) -> SelectionResult:
         if not sticky_key or not sticky_repo:
             return select_account(
                 states,
-                prefer_earlier_reset=prefer_earlier_reset_accounts,
+                weekly_reset_preference=weekly_reset_preference,
+                prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
                 routing_strategy=routing_strategy,
             )
         if sticky_kind is None:
@@ -650,7 +669,8 @@ class LoadBalancer:
                 if not (budget_exhausted or rate_limit_far_away):
                     pinned_result = select_account(
                         [pinned],
-                        prefer_earlier_reset=prefer_earlier_reset_accounts,
+                        weekly_reset_preference=weekly_reset_preference,
+                        prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
                         routing_strategy=routing_strategy,
                         allow_backoff_fallback=False,
                     )
@@ -667,7 +687,8 @@ class LoadBalancer:
                     if budget_exhausted:
                         pool_best = select_account(
                             states,
-                            prefer_earlier_reset=prefer_earlier_reset_accounts,
+                            weekly_reset_preference=weekly_reset_preference,
+                            prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
                             routing_strategy=routing_strategy,
                             deterministic_probe=True,
                         )
@@ -681,7 +702,8 @@ class LoadBalancer:
                         if pool_also_exhausted:
                             pinned_result = select_account(
                                 [pinned],
-                                prefer_earlier_reset=prefer_earlier_reset_accounts,
+                                weekly_reset_preference=weekly_reset_preference,
+                                prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
                                 routing_strategy=routing_strategy,
                                 allow_backoff_fallback=False,
                             )
@@ -705,7 +727,8 @@ class LoadBalancer:
                     grace_result = select_account(
                         [grace_copy],
                         now=time.time() + _STICKY_GRACE_PERIOD_SECONDS,
-                        prefer_earlier_reset=prefer_earlier_reset_accounts,
+                        weekly_reset_preference=weekly_reset_preference,
+                        prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
                         routing_strategy=routing_strategy,
                         allow_backoff_fallback=False,
                     )
@@ -731,14 +754,126 @@ class LoadBalancer:
             else:
                 await sticky_repo.delete(sticky_key, kind=sticky_kind)
 
-        chosen = select_account(
-            states,
-            prefer_earlier_reset=prefer_earlier_reset_accounts,
+        chosen = await self._select_initial_sticky_candidate(
+            states=states,
+            sticky_key=sticky_key,
+            sticky_kind=sticky_kind,
+            weekly_reset_preference=weekly_reset_preference,
+            prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
             routing_strategy=routing_strategy,
+            recent_assignments_repo=recent_assignments_repo,
+            spread_new_codex_sessions=spread_new_codex_sessions,
+            spread_window_seconds=spread_window_seconds,
+            spread_top_pool_size=spread_top_pool_size,
         )
         if persist_fallback and chosen.account is not None and chosen.account.account_id in account_map:
             await sticky_repo.upsert(sticky_key, chosen.account.account_id, kind=sticky_kind)
+            if (
+                sticky_kind == StickySessionKind.CODEX_SESSION
+                and existing is None
+                and recent_assignments_repo is not None
+            ):
+                await recent_assignments_repo.upsert(
+                    sticky_key,
+                    chosen.account.account_id,
+                    kind=sticky_kind,
+                )
+                await recent_assignments_repo.purge_before(
+                    utcnow() - timedelta(seconds=max(spread_window_seconds, 1) * _RECENT_SESSION_ASSIGNMENT_TTL_MULTIPLIER),
+                    kind=sticky_kind,
+                )
         return chosen
+
+    async def _select_initial_sticky_candidate(
+        self,
+        *,
+        states: list[AccountState],
+        sticky_key: str,
+        sticky_kind: StickySessionKind,
+        weekly_reset_preference: WeeklyResetPreference,
+        prioritize_full_weekly_capacity: bool,
+        routing_strategy: RoutingStrategy,
+        recent_assignments_repo: RecentSessionAssignmentsRepository | None,
+        spread_new_codex_sessions: bool,
+        spread_window_seconds: int,
+        spread_top_pool_size: int,
+    ) -> SelectionResult:
+        if (
+            sticky_kind != StickySessionKind.CODEX_SESSION
+            or not spread_new_codex_sessions
+            or recent_assignments_repo is None
+            or spread_window_seconds <= 0
+            or spread_top_pool_size <= 1
+        ):
+            return select_account(
+                states,
+                weekly_reset_preference=weekly_reset_preference,
+                prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
+                routing_strategy=routing_strategy,
+            )
+
+        pool = self._build_priority_pool(
+            states,
+            weekly_reset_preference=weekly_reset_preference,
+            prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
+            routing_strategy=routing_strategy,
+            limit=spread_top_pool_size,
+        )
+        if len(pool) <= 1:
+            return select_account(
+                states,
+                weekly_reset_preference=weekly_reset_preference,
+                prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
+                routing_strategy=routing_strategy,
+            )
+
+        since = utcnow() - timedelta(seconds=spread_window_seconds)
+        recent_assignments = await recent_assignments_repo.latest_account_assignments_since(
+            kind=sticky_kind,
+            since=since,
+            account_ids=[state.account_id for state in pool],
+        )
+        for candidate in pool:
+            if candidate.account_id not in recent_assignments:
+                return SelectionResult(candidate, None)
+
+        oldest_candidate = min(
+            pool,
+            key=lambda state: (
+                recent_assignments.get(state.account_id, datetime.min),
+                state.last_selected_at or 0.0,
+                state.account_id,
+            ),
+        )
+        return SelectionResult(oldest_candidate, None)
+
+    def _build_priority_pool(
+        self,
+        states: list[AccountState],
+        *,
+        weekly_reset_preference: WeeklyResetPreference,
+        prioritize_full_weekly_capacity: bool,
+        routing_strategy: RoutingStrategy,
+        limit: int,
+    ) -> list[AccountState]:
+        if limit <= 0:
+            return []
+        remaining = [replace(state) for state in states]
+        pool: list[AccountState] = []
+        while remaining and len(pool) < limit:
+            result = select_account(
+                remaining,
+                weekly_reset_preference=weekly_reset_preference,
+                prioritize_full_weekly_capacity=prioritize_full_weekly_capacity,
+                routing_strategy=routing_strategy,
+            )
+            if result.account is None:
+                break
+            pool.append(result.account)
+            remaining = [
+                state for state in remaining if state.account_id != result.account.account_id
+            ]
+        return pool
 
     async def mark_rate_limit(self, account: Account, error: UpstreamError) -> None:
         lock = await self._get_account_lock(account.id)

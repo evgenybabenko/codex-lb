@@ -38,12 +38,22 @@ def upgrade() -> None:
     if existing is not None:
         return
 
-    insert_columns = ["id", "sticky_threads_enabled", "prefer_earlier_reset_accounts"]
-    params: dict[str, int | bool] = {
+    insert_columns = ["id", "sticky_threads_enabled"]
+    params: dict[str, int | bool | str] = {
         "id": 1,
         "sticky_threads_enabled": False,
-        "prefer_earlier_reset_accounts": False,
     }
+
+    if "weekly_reset_preference" in columns:
+        insert_columns.append("weekly_reset_preference")
+        params["weekly_reset_preference"] = "disabled"
+    elif "prefer_earlier_reset_accounts" in columns:
+        insert_columns.append("prefer_earlier_reset_accounts")
+        params["prefer_earlier_reset_accounts"] = False
+
+    if "prioritize_full_weekly_capacity" in columns:
+        insert_columns.append("prioritize_full_weekly_capacity")
+        params["prioritize_full_weekly_capacity"] = True
 
     if "import_without_overwrite" in columns:
         insert_columns.append("import_without_overwrite")

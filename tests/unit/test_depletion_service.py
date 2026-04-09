@@ -119,7 +119,7 @@ def test_compute_depletion_empty_history() -> None:
     assert result is None
 
 
-def test_aggregate_depletion_max_risk() -> None:
+def test_aggregate_depletion_is_capacity_weighted() -> None:
     metrics = [
         DepletionMetrics(
             risk=0.3,
@@ -129,6 +129,7 @@ def test_aggregate_depletion_max_risk() -> None:
             safe_usage_percent=50.0,
             projected_exhaustion_at=None,
             seconds_until_exhaustion=None,
+            capacity_credits=10.0,
         ),
         DepletionMetrics(
             risk=0.8,
@@ -138,6 +139,7 @@ def test_aggregate_depletion_max_risk() -> None:
             safe_usage_percent=50.0,
             projected_exhaustion_at=None,
             seconds_until_exhaustion=None,
+            capacity_credits=60.0,
         ),
         DepletionMetrics(
             risk=0.5,
@@ -147,12 +149,16 @@ def test_aggregate_depletion_max_risk() -> None:
             safe_usage_percent=50.0,
             projected_exhaustion_at=None,
             seconds_until_exhaustion=None,
+            capacity_credits=30.0,
         ),
     ]
     result = compute_aggregate_depletion(metrics)
     assert result is not None
-    assert result.risk == pytest.approx(0.8)
-    assert result.risk_level == "danger"
+    expected_risk = ((0.3 * 10.0) + (0.8 * 60.0) + (0.5 * 30.0)) / 100.0
+    expected_burn_rate = ((0.5 * 10.0) + (2.0 * 60.0) + (1.0 * 30.0)) / 100.0
+    assert result.risk == pytest.approx(expected_risk)
+    assert result.risk_level == "warning"
+    assert result.burn_rate == pytest.approx(expected_burn_rate)
 
 
 def test_aggregate_depletion_empty_returns_none() -> None:
@@ -175,6 +181,7 @@ def test_aggregate_depletion_single_metric() -> None:
             safe_usage_percent=60.0,
             projected_exhaustion_at=None,
             seconds_until_exhaustion=None,
+            capacity_credits=225.0,
         )
     ]
     result = compute_aggregate_depletion(metrics)

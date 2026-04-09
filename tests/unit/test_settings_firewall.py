@@ -35,3 +35,29 @@ def test_settings_rejects_http_bridge_instance_id_missing_from_ring(monkeypatch)
 
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_settings_parses_model_context_window_overrides_json(monkeypatch):
+    monkeypatch.setenv("CODEX_LB_MODEL_CONTEXT_WINDOW_OVERRIDES", '{"gpt-5.4": 515000, "gpt-5.3": 272000}')
+
+    settings = Settings()
+
+    assert settings.model_context_window_overrides == {
+        "gpt-5.4": 515000,
+        "gpt-5.3": 272000,
+    }
+
+
+def test_settings_rejects_invalid_model_context_window_overrides(monkeypatch):
+    monkeypatch.setenv("CODEX_LB_MODEL_CONTEXT_WINDOW_OVERRIDES", '{"gpt-5.4": 0}')
+
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+def test_settings_normalizes_dashboard_bootstrap_token(monkeypatch):
+    monkeypatch.setenv("CODEX_LB_DASHBOARD_BOOTSTRAP_TOKEN", "  secret-bootstrap  ")
+
+    settings = Settings()
+
+    assert settings.dashboard_bootstrap_token == "secret-bootstrap"

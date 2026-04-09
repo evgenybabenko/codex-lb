@@ -195,7 +195,12 @@ class DashboardService:
                 if rows:
                     secondary_history[account_id] = rows
 
-        pri_depletion, sec_depletion = _build_depletion_by_window(primary_history, secondary_history, now)
+        pri_depletion, sec_depletion = _build_depletion_by_window(
+            primary_history,
+            secondary_history,
+            now,
+            accounts_by_id={account.id: account for account in accounts},
+        )
 
         return DashboardOverviewResponse(
             last_sync_at=_latest_recorded_at(primary_usage, secondary_usage, additional_ts),
@@ -262,18 +267,23 @@ def _build_depletion_by_window(
     primary_history: dict[str, list[UsageHistory]],
     secondary_history: dict[str, list[UsageHistory]],
     now,
+    *,
+    accounts_by_id,
 ) -> tuple[DepletionResponse | None, DepletionResponse | None]:
     """Compute depletion independently per window."""
 
     def _aggregate(history: dict[str, list[UsageHistory]], window: str) -> DepletionResponse | None:
         metrics = []
         for account_id, rows in history.items():
+            account = accounts_by_id.get(account_id)
+            capacity_credits = usage_core.capacity_for_plan(account.plan_type if account else None, window)
             m = compute_depletion_for_account(
                 account_id=account_id,
                 limit_name="standard",
                 window=window,
                 history=rows,
                 now=now,
+                capacity_credits=capacity_credits,
             )
             metrics.append(m)
         agg = compute_aggregate_depletion(metrics)

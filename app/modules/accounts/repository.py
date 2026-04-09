@@ -235,7 +235,7 @@ class AccountsRepository:
         workspace_id: str | None = None,
         workspace_name: str | None = None,
     ) -> bool:
-        values: dict[str, bytes | datetime | str] = {
+        values: dict[str, object] = {
             "access_token_encrypted": access_token_encrypted,
             "refresh_token_encrypted": refresh_token_encrypted,
             "id_token_encrypted": id_token_encrypted,

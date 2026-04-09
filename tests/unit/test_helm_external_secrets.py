@@ -259,7 +259,7 @@ def test_external_database_url_is_rendered_into_chart_managed_secret_when_postgr
     assert 'database-url: "postgresql+asyncpg://user:pass@db.example.com:5432/codexlb"' in rendered
 
 
-def test_network_policy_does_not_allow_http_ingress_from_all_namespaces_by_default() -> None:
+def test_prod_overlay_allows_http_ingress_only_from_the_configured_ingress_namespace() -> None:
     rendered = _helm_template(
         "-f",
         str(_CHART_DIR / "values-prod.yaml"),
@@ -267,4 +267,10 @@ def test_network_policy_does_not_allow_http_ingress_from_all_namespaces_by_defau
         "templates/networkpolicy.yaml",
     )
 
-    assert "port: 2455" not in rendered
+    http_ingress_block = rendered.split("# Allow HTTP traffic from ingress controller", 1)[1].split(
+        "# Allow metrics scraping from Prometheus", 1
+    )[0]
+
+    assert "port: 2455" in rendered
+    assert "kubernetes.io/metadata.name: ingress-nginx" in rendered
+    assert "namespaceSelector: {}" not in http_ingress_block

@@ -353,10 +353,11 @@ async def _build_models_response(api_key: ApiKeyData | None) -> Response:
 
 
 def _to_model_metadata(model: UpstreamModel) -> ModelMetadata:
+    context_window = _effective_context_window(model)
     return ModelMetadata(
         display_name=model.display_name,
         description=model.description,
-        context_window=model.context_window,
+        context_window=context_window,
         input_modalities=list(model.input_modalities),
         supported_reasoning_levels=[
             ReasoningLevelSchema(effort=rl.effort, description=rl.description)
@@ -372,6 +373,11 @@ def _to_model_metadata(model: UpstreamModel) -> ModelMetadata:
         minimal_client_version=model.minimal_client_version,
         priority=model.priority,
     )
+
+
+def _effective_context_window(model: UpstreamModel) -> int:
+    overrides = get_settings().model_context_window_overrides
+    return overrides.get(model.slug, model.context_window)
 
 
 @v1_router.post(

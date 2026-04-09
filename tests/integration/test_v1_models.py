@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.core.config.settings import get_settings
 from app.core.openai.model_registry import ReasoningLevel, UpstreamModel, get_model_registry
 
 pytestmark = pytest.mark.integration
@@ -121,3 +122,44 @@ async def test_model_sets_are_consistent_across_api_endpoints(async_client):
     v1_ids = {item["id"] for item in v1.json()["data"]}
     codex_ids = {item["id"] for item in codex.json()["data"]}
     assert dashboard_ids == v1_ids == codex_ids
+
+
+@pytest.mark.asyncio
+async def test_model_context_window_override_applies_consistently(async_client, monkeypatch):
+    monkeypatch.setenv("CODEX_LB_MODEL_CONTEXT_WINDOW_OVERRIDES", '{"gpt-5.2": 515000}')
+    get_settings.cache_clear()
+
+    await _populate_test_registry()
+
+    dashboard = await async_client.get("/api/models")
+    v1 = await async_client.get("/v1/models")
+    codex = await async_client.get("/backend-api/codex/models")
+
+    assert dashboard.status_code == 200
+    assert v1.status_code == 200
+    assert codex.status_code == 200
+
+    dashboard_entry = next(item for item in dashboard.json()["models"] if item["id"] == "gpt-5.2")
+    v1_entry = next(item for item in v1.json()["data"] if item["id"] == "gpt-5.2")
+    codex_entry = next(item for item in codex.json()["data"] if item["id"] == "gpt-5.2")
+
+    assert dashboard_entry["contextWindow"] == 515000
+    assert v1_entry["metadata"]["context_window"] == 515000
+    assert codex_entry["metadata"]["context_window"] == 515000
+
+
+@pytest.mark.asyncio
+async def test_non_overridden_model_context_window_stays_upstream(async_client, monkeypatch):
+    monkeypatch.setenv("CODEX_LB_MODEL_CONTEXT_WINDOW_OVERRIDES", '{"gpt-5.2": 515000}')
+    get_settings.cache_clear()
+
+    await _populate_test_registry()
+
+    resp = await async_client.get("/v1/models")
+    assert resp.status_code == 200
+
+    gpt52 = next(item for item in resp.json()["data"] if item["id"] == "gpt-5.2")
+    gpt53 = next(item for item in resp.json()["data"] if item["id"] == "gpt-5.3-codex")
+
+    assert gpt52["metadata"]["context_window"] == 515000
+    assert gpt53["metadata"]["context_window"] == 272000

@@ -8,6 +8,7 @@ class DashboardAuthSessionResponse(DashboardModel):
     password_required: bool
     totp_required_on_login: bool
     totp_configured: bool
+    bootstrap_token_required: bool = False
 
 
 class TotpSetupStartResponse(DashboardModel):
@@ -27,6 +28,7 @@ class TotpVerifyRequest(DashboardModel):
 
 class PasswordSetupRequest(DashboardModel):
     password: str
+    bootstrap_token: str | None = None
 
 
 class PasswordLoginRequest(DashboardModel):

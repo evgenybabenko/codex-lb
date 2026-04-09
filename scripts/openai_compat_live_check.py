@@ -19,6 +19,8 @@ from openai.types.chat import (
     ChatCompletionUserMessageParam,
 )
 
+from app.core.clients.openai_turn_state import TurnStateOpenAI
+
 BASE_URL = os.environ.get("CODEX_BASE_URL", "http://localhost:2455/v1")
 API_KEY = os.environ.get("CODEX_API_KEY", "sk-local")
 MODEL_OVERRIDE = os.environ.get("CODEX_MODEL")
@@ -303,12 +305,14 @@ def main() -> int:
             return _response_stream_summary(stream)
 
         def r_previous_response_id() -> dict[str, Any]:
-            first = client.responses.create(model=model, input=cast(Any, _input_text_payload(DEFAULT_TEXT)))
+            turn_state_client = TurnStateOpenAI(client)
+            first = turn_state_client.responses.create(model=model, input=cast(Any, _input_text_payload(DEFAULT_TEXT)))
             first_id = getattr(first, "id", None)
             if not first_id:
                 raise CaseError({"message": "missing response id from first call"})
+            first_turn_state = turn_state_client.turn_state
             try:
-                second = client.responses.create(
+                second = turn_state_client.responses.create(
                     model=model,
                     input=cast(Any, _input_text_payload("Repeat exactly: ok")),
                     previous_response_id=first_id,
@@ -316,9 +320,12 @@ def main() -> int:
             except Exception as exc:
                 detail = _error_detail(exc)
                 detail["first_id"] = first_id
+                detail["stored_turn_state"] = first_turn_state
                 raise CaseError(detail) from exc
             return {
                 "first_id": first_id,
+                "first_turn_state": first_turn_state,
+                "second_turn_state": turn_state_client.turn_state,
                 "second_id": getattr(second, "id", None),
                 "second_output_text": getattr(second, "output_text", None),
             }

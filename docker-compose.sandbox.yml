@@ -47,6 +47,7 @@ services:
       - "5174:5173"
     environment:
       API_PROXY_TARGET: http://server:2455
+      VITE_HMR_CLIENT_PORT: "5174"
     develop:
       watch:
         - action: sync

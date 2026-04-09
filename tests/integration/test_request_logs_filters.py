@@ -126,6 +126,46 @@ async def test_request_logs_status_rate_limit_filters_codes(async_client, db_set
 
 
 @pytest.mark.asyncio
+async def test_request_logs_status_rate_limit_includes_server_overloaded(async_client, db_setup):
+    now = utcnow()
+    async with SessionLocal() as session:
+        accounts_repo = AccountsRepository(session)
+        logs_repo = RequestLogsRepository(session)
+        await accounts_repo.upsert(_make_account("acc_rate_overloaded", "rate-overloaded@example.com"))
+
+        await logs_repo.add_log(
+            account_id="acc_rate_overloaded",
+            request_id="req_rate_overloaded",
+            model="gpt-5.4",
+            input_tokens=1,
+            output_tokens=0,
+            latency_ms=10,
+            status="error",
+            error_code="server_is_overloaded",
+            error_message="Our servers are currently overloaded. Please try again later.",
+            requested_at=now - timedelta(minutes=1),
+        )
+        await logs_repo.add_log(
+            account_id="acc_rate_overloaded",
+            request_id="req_rate_quota",
+            model="gpt-5.4",
+            input_tokens=1,
+            output_tokens=0,
+            latency_ms=10,
+            status="error",
+            error_code="insufficient_quota",
+            requested_at=now - timedelta(minutes=2),
+        )
+
+    response = await async_client.get("/api/request-logs?status=rate_limit")
+    assert response.status_code == 200
+    payload = response.json()["requests"]
+    assert len(payload) == 1
+    assert payload[0]["status"] == "rate_limit"
+    assert payload[0]["errorCode"] == "server_is_overloaded"
+
+
+@pytest.mark.asyncio
 async def test_request_logs_status_quota_filters_codes(async_client, db_setup):
     now = utcnow()
     async with SessionLocal() as session:

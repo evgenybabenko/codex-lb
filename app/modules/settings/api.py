@@ -78,11 +78,15 @@ async def get_settings(
     return DashboardSettingsResponse(
         sticky_threads_enabled=settings.sticky_threads_enabled,
         upstream_stream_transport=settings.upstream_stream_transport,
-        prefer_earlier_reset_accounts=settings.prefer_earlier_reset_accounts,
+        weekly_reset_preference=settings.weekly_reset_preference,
+        prioritize_full_weekly_capacity=settings.prioritize_full_weekly_capacity,
         routing_strategy=settings.routing_strategy,
         openai_cache_affinity_max_age_seconds=settings.openai_cache_affinity_max_age_seconds,
         http_responses_session_bridge_prompt_cache_idle_ttl_seconds=settings.http_responses_session_bridge_prompt_cache_idle_ttl_seconds,
         sticky_reallocation_budget_threshold_pct=settings.sticky_reallocation_budget_threshold_pct,
+        spread_new_codex_sessions=settings.spread_new_codex_sessions,
+        spread_new_codex_sessions_window_seconds=settings.spread_new_codex_sessions_window_seconds,
+        spread_new_codex_sessions_top_pool_size=settings.spread_new_codex_sessions_top_pool_size,
         import_without_overwrite=settings.import_without_overwrite,
         totp_required_on_login=settings.totp_required_on_login,
         totp_configured=settings.totp_configured,
@@ -107,7 +111,12 @@ async def update_settings(
             DashboardSettingsUpdateData(
                 sticky_threads_enabled=payload.sticky_threads_enabled,
                 upstream_stream_transport=payload.upstream_stream_transport or current.upstream_stream_transport,
-                prefer_earlier_reset_accounts=payload.prefer_earlier_reset_accounts,
+                weekly_reset_preference=payload.weekly_reset_preference or current.weekly_reset_preference,
+                prioritize_full_weekly_capacity=(
+                    payload.prioritize_full_weekly_capacity
+                    if payload.prioritize_full_weekly_capacity is not None
+                    else current.prioritize_full_weekly_capacity
+                ),
                 routing_strategy=payload.routing_strategy or current.routing_strategy,
                 openai_cache_affinity_max_age_seconds=(
                     payload.openai_cache_affinity_max_age_seconds
@@ -123,6 +132,21 @@ async def update_settings(
                     payload.sticky_reallocation_budget_threshold_pct
                     if payload.sticky_reallocation_budget_threshold_pct is not None
                     else current.sticky_reallocation_budget_threshold_pct
+                ),
+                spread_new_codex_sessions=(
+                    payload.spread_new_codex_sessions
+                    if payload.spread_new_codex_sessions is not None
+                    else current.spread_new_codex_sessions
+                ),
+                spread_new_codex_sessions_window_seconds=(
+                    payload.spread_new_codex_sessions_window_seconds
+                    if payload.spread_new_codex_sessions_window_seconds is not None
+                    else current.spread_new_codex_sessions_window_seconds
+                ),
+                spread_new_codex_sessions_top_pool_size=(
+                    payload.spread_new_codex_sessions_top_pool_size
+                    if payload.spread_new_codex_sessions_top_pool_size is not None
+                    else current.spread_new_codex_sessions_top_pool_size
                 ),
                 import_without_overwrite=(
                     payload.import_without_overwrite
@@ -150,9 +174,13 @@ async def update_settings(
         for field_name in (
             "sticky_threads_enabled",
             "upstream_stream_transport",
-            "prefer_earlier_reset_accounts",
+            "weekly_reset_preference",
+            "prioritize_full_weekly_capacity",
             "routing_strategy",
             "openai_cache_affinity_max_age_seconds",
+            "spread_new_codex_sessions",
+            "spread_new_codex_sessions_window_seconds",
+            "spread_new_codex_sessions_top_pool_size",
             "import_without_overwrite",
             "totp_required_on_login",
             "api_key_auth_enabled",
@@ -167,11 +195,15 @@ async def update_settings(
     return DashboardSettingsResponse(
         sticky_threads_enabled=updated.sticky_threads_enabled,
         upstream_stream_transport=updated.upstream_stream_transport,
-        prefer_earlier_reset_accounts=updated.prefer_earlier_reset_accounts,
+        weekly_reset_preference=updated.weekly_reset_preference,
+        prioritize_full_weekly_capacity=updated.prioritize_full_weekly_capacity,
         routing_strategy=updated.routing_strategy,
         openai_cache_affinity_max_age_seconds=updated.openai_cache_affinity_max_age_seconds,
         http_responses_session_bridge_prompt_cache_idle_ttl_seconds=updated.http_responses_session_bridge_prompt_cache_idle_ttl_seconds,
         sticky_reallocation_budget_threshold_pct=updated.sticky_reallocation_budget_threshold_pct,
+        spread_new_codex_sessions=updated.spread_new_codex_sessions,
+        spread_new_codex_sessions_window_seconds=updated.spread_new_codex_sessions_window_seconds,
+        spread_new_codex_sessions_top_pool_size=updated.spread_new_codex_sessions_top_pool_size,
         import_without_overwrite=updated.import_without_overwrite,
         totp_required_on_login=updated.totp_required_on_login,
         totp_configured=updated.totp_configured,

@@ -6,7 +6,7 @@ from app.core.usage.logs import RequestLogLike, cached_input_tokens_from_log, co
 from app.db.models import RequestLog
 from app.modules.request_logs.schemas import RequestLogEntry
 
-RATE_LIMIT_CODES = {"rate_limit_exceeded", "usage_limit_reached"}
+RATE_LIMIT_CODES = {"rate_limit_exceeded", "usage_limit_reached", "server_is_overloaded"}
 QUOTA_CODES = {"insufficient_quota", "usage_not_included", "quota_exceeded"}
 
 

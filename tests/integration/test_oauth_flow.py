@@ -98,7 +98,7 @@ async def test_device_oauth_flow_keeps_separate_accounts_when_import_without_ove
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "importWithoutOverwrite": True,
             "totpRequiredOnLogin": False,
         },
@@ -715,7 +715,7 @@ async def test_device_oauth_flow_reports_error_when_duplicate_email_is_ambiguous
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "importWithoutOverwrite": True,
             "totpRequiredOnLogin": False,
         },
@@ -792,7 +792,7 @@ async def test_device_oauth_flow_reports_error_when_duplicate_email_is_ambiguous
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "importWithoutOverwrite": False,
             "totpRequiredOnLogin": False,
         },

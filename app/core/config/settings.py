@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import socket
 from functools import lru_cache
 from ipaddress import ip_network
@@ -75,6 +76,7 @@ class Settings(BaseSettings):
     oauth_redirect_uri: str = "http://localhost:1455/auth/callback"
     oauth_callback_host: str = _default_oauth_callback_host()
     oauth_callback_port: int = 1455  # Do not change the port. OpenAI dislikes changes.
+    dashboard_bootstrap_token: str | None = Field(default=None, repr=False)
     token_refresh_timeout_seconds: float = 8.0
     transcription_request_budget_seconds: float = Field(default=120.0, gt=0)
     token_refresh_interval_days: int = 8
@@ -108,6 +110,7 @@ class Settings(BaseSettings):
     model_registry_enabled: bool = True
     model_registry_refresh_interval_seconds: int = Field(default=300, gt=0)
     model_registry_client_version: str = "0.101.0"
+    model_context_window_overrides: Annotated[dict[str, int], NoDecode] = Field(default_factory=dict)
     firewall_trust_proxy_headers: bool = False
     firewall_trusted_proxy_cidrs: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["127.0.0.1/32", "::1/128"]
@@ -186,6 +189,43 @@ class Settings(BaseSettings):
                         normalized.append(host)
             return normalized
         raise TypeError("image_inline_allowed_hosts must be a list or comma-separated string")
+
+    @field_validator("model_context_window_overrides", mode="before")
+    @classmethod
+    def _normalize_model_context_window_overrides(cls, value: object) -> dict[str, int]:
+        if value is None or value == "":
+            return {}
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError as exc:
+                raise ValueError("model_context_window_overrides must be valid JSON") from exc
+        if not isinstance(value, dict):
+            raise TypeError("model_context_window_overrides must be a JSON object")
+
+        normalized: dict[str, int] = {}
+        for raw_key, raw_value in value.items():
+            if not isinstance(raw_key, str):
+                raise TypeError("model_context_window_overrides keys must be strings")
+            model_slug = raw_key.strip()
+            if not model_slug:
+                raise ValueError("model_context_window_overrides keys must not be empty")
+            if not isinstance(raw_value, int) or isinstance(raw_value, bool) or raw_value <= 0:
+                raise ValueError(
+                    f"model_context_window_overrides[{model_slug!r}] must be a positive integer"
+                )
+            normalized[model_slug] = raw_value
+        return normalized
+
+    @field_validator("dashboard_bootstrap_token", mode="before")
+    @classmethod
+    def _normalize_dashboard_bootstrap_token(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise TypeError("dashboard_bootstrap_token must be a string")
+        token = value.strip()
+        return token or None
 
     @field_validator("firewall_trusted_proxy_cidrs", mode="before")
     @classmethod

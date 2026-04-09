@@ -14,7 +14,7 @@ pytestmark = pytest.mark.integration
 async def test_zstd_request_decompression(async_client, monkeypatch):
     payload = {
         "stickyThreadsEnabled": True,
-        "preferEarlierResetAccounts": False,
+        "weeklyResetPreference": "disabled",
     }
     body = json.dumps(payload).encode("utf-8")
 
@@ -30,14 +30,14 @@ async def test_zstd_request_decompression(async_client, monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["stickyThreadsEnabled"] is True
-    assert data["preferEarlierResetAccounts"] is False
+    assert data["weeklyResetPreference"] == "disabled"
 
 
 @pytest.mark.asyncio
 async def test_zstd_request_decompression_rejects_large_payload(async_client, monkeypatch):
     payload = {
         "stickyThreadsEnabled": True,
-        "preferEarlierResetAccounts": False,
+        "weeklyResetPreference": "disabled",
         "padding": "A" * 512,
     }
     body = json.dumps(payload).encode("utf-8")

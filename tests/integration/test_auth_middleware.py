@@ -5,6 +5,7 @@ from datetime import timedelta
 
 import pytest
 
+from app.core.config.settings import get_settings
 from app.core.config.settings_cache import get_settings_cache
 from app.core.crypto import TokenEncryptor
 from app.core.usage.models import UsagePayload
@@ -42,7 +43,7 @@ async def _set_migration_inconsistent_totp_only_mode() -> None:
             settings = DashboardSettings(
                 id=1,
                 sticky_threads_enabled=False,
-                prefer_earlier_reset_accounts=False,
+                weekly_reset_preference="disabled",
                 totp_required_on_login=True,
                 password_hash=None,
                 api_key_auth_enabled=False,
@@ -80,6 +81,64 @@ async def test_session_branch_allows_without_password_and_blocks_without_session
     assert login.status_code == 200
     allowed = await async_client.get("/api/settings")
     assert allowed.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_remote_session_reports_bootstrap_token_requirement(async_client, monkeypatch):
+    monkeypatch.setenv("CODEX_LB_DASHBOARD_BOOTSTRAP_TOKEN", "secret-bootstrap")
+    monkeypatch.setenv("CODEX_LB_FIREWALL_TRUST_PROXY_HEADERS", "true")
+    get_settings.cache_clear()
+
+    session = await async_client.get(
+        "/api/dashboard-auth/session",
+        headers={"x-forwarded-for": "203.0.113.10"},
+    )
+
+    assert session.status_code == 200
+    assert session.json()["bootstrapTokenRequired"] is True
+
+
+@pytest.mark.asyncio
+async def test_remote_first_setup_requires_bootstrap_token(async_client, monkeypatch):
+    monkeypatch.setenv("CODEX_LB_DASHBOARD_BOOTSTRAP_TOKEN", "secret-bootstrap")
+    monkeypatch.setenv("CODEX_LB_FIREWALL_TRUST_PROXY_HEADERS", "true")
+    get_settings.cache_clear()
+
+    missing = await async_client.post(
+        "/api/dashboard-auth/password/setup",
+        headers={"x-forwarded-for": "203.0.113.10"},
+        json={"password": "password123"},
+    )
+    assert missing.status_code == 400
+    assert missing.json()["error"]["code"] == "bootstrap_token_required"
+
+    invalid = await async_client.post(
+        "/api/dashboard-auth/password/setup",
+        headers={"x-forwarded-for": "203.0.113.10"},
+        json={"password": "password123", "bootstrapToken": "wrong-token"},
+    )
+    assert invalid.status_code == 400
+    assert invalid.json()["error"]["code"] == "invalid_bootstrap_token"
+
+    valid = await async_client.post(
+        "/api/dashboard-auth/password/setup",
+        headers={"x-forwarded-for": "203.0.113.10"},
+        json={"password": "password123", "bootstrapToken": "secret-bootstrap"},
+    )
+    assert valid.status_code == 200
+    assert valid.json()["passwordRequired"] is True
+
+
+@pytest.mark.asyncio
+async def test_local_first_setup_ignores_bootstrap_token_requirement(async_client, monkeypatch):
+    monkeypatch.setenv("CODEX_LB_DASHBOARD_BOOTSTRAP_TOKEN", "secret-bootstrap")
+    get_settings.cache_clear()
+
+    setup = await async_client.post(
+        "/api/dashboard-auth/password/setup",
+        json={"password": "password123"},
+    )
+    assert setup.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -125,7 +184,7 @@ async def test_api_key_branch_disabled_then_enabled(async_client):
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": False,
             "apiKeyAuthEnabled": True,
         },

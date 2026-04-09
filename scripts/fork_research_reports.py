@@ -406,6 +406,135 @@ def markdown_list(items: list[str], indent: str = "- ") -> list[str]:
     return [f"{indent}{item}" for item in items]
 
 
+def strip_bullet_prefix(text: str) -> str:
+    return text[2:].rstrip(".") if text.startswith("- ") else text.rstrip(".")
+
+
+def build_checklist_summary(
+    full_name: str,
+    repo: str,
+    default_cmp: dict,
+    extra_branch_summaries: list[BranchSummary],
+    default_topics: list[str],
+    default_subjects: list[str],
+    recommendation_text: str,
+) -> str:
+    if default_cmp.get("error"):
+        message = default_cmp.get("error_message", "")
+        repo_lower = repo.lower()
+        if "No common ancestor" in message:
+            if repo_lower == "codex-lb-ts" or repo_lower.endswith("-ts") or "/codex-lb-ts" in full_name.lower():
+                return "Это отдельный TypeScript-порт проекта. Для быстрого переноса фич почти не годится, но может быть полезен как источник идей."
+            return "История форка сильно оторвана от upstream. Это скорее отдельная линия развития, чем обычный набор патчей поверх основного проекта."
+        return "GitHub не дал нормальное автоматическое сравнение. Если захотим что-то тянуть отсюда, нужен отдельный ручной разбор."
+
+    if default_cmp.get("ahead_by", 0) == 0:
+        if extra_branch_summaries:
+            for branch in extra_branch_summaries:
+                if branch.subjects:
+                    return (
+                        "На основной ветке почти ничего нет, но в отдельных feature-ветках лежат идеи вроде: "
+                        + "; ".join(branch.subjects[:2])
+                        + "."
+                    )
+            return "На основной ветке своих фич почти нет, но внутри форка есть отдельные feature-ветки с полезной работой."
+        return "По сути это копия upstream без своих заметных отличий."
+
+    if default_topics:
+        return "Главное, что тут выделяется: " + "; ".join(strip_bullet_prefix(item) for item in default_topics[:2]) + "."
+
+    if default_subjects:
+        return "По уникальным коммитам видно: " + "; ".join(default_subjects[:2]) + "."
+
+    for branch in extra_branch_summaries:
+        if branch.subjects:
+            return "Главная ценность сидит в отдельных ветках: " + "; ".join(branch.subjects[:2]) + "."
+
+    return recommendation_text
+
+
+def should_borrow_from_fork(
+    repo: str,
+    rating: str,
+    default_cmp: dict,
+    extra_branch_summaries: list[BranchSummary],
+    default_topics: list[str],
+    default_subjects: list[str],
+) -> bool:
+    if rating in {"None", "Low"}:
+        return False
+
+    repo_lower = repo.lower()
+    text_parts = list(default_subjects)
+    text_parts.extend(strip_bullet_prefix(item) for item in default_topics)
+    for branch in extra_branch_summaries[:4]:
+        text_parts.extend(branch.subjects[:3])
+    combined = " ".join(text_parts).lower()
+
+    negative_keywords = [
+        "translate",
+        "translation",
+        "polish",
+        "korean",
+        "cn",
+        "readme",
+        "docs",
+        "workflow",
+        "windows startup",
+        "unit test",
+        "archive active changes",
+        "fixture",
+        "typescript",
+        "rewrite",
+    ]
+    positive_keywords = [
+        "dashboard",
+        "usage",
+        "quota",
+        "credit",
+        "api key",
+        "rbac",
+        "sticky",
+        "failover",
+        "fallback",
+        "previous response",
+        "bridge",
+        "responses",
+        "transcription",
+        "request visibility",
+        "error details",
+        "platform fallback",
+        "oauth",
+        "batch auth",
+        "import",
+        "export",
+        "neon",
+        "postgres",
+        "admin token",
+        "portal",
+        "viewer",
+    ]
+
+    if repo_lower == "codex-lb-ts" or repo_lower.endswith("-ts"):
+        return False
+    if any(keyword in combined for keyword in negative_keywords):
+        return False
+    if any(keyword in combined for keyword in positive_keywords):
+        return True
+    if default_cmp.get("error"):
+        return False
+    return rating == "High" and (
+        has_substantive_code(default_cmp)
+        or any(has_substantive_code(item.compare) for item in extra_branch_summaries if not item.compare.get("error"))
+    )
+
+
+def already_in_our_variant(ours_cmp: dict, extra_branch_summaries: list[BranchSummary]) -> bool:
+    if ours_cmp.get("error"):
+        return False
+    return ours_cmp.get("ahead_by", 0) == 0 and not extra_branch_summaries
+
+
 def main() -> None:
     root = Path.cwd()
     out_dir = root / "research" / "forks" / SNAPSHOT_DATE
@@ -449,6 +578,7 @@ def main() -> None:
 
     reports_index: list[dict] = []
     catalog_rows: list[tuple[str, int, str, int, str]] = []
+    fork_checklist_rows: list[dict] = []
 
     for idx, fork in enumerate(forks, start=1):
         full_name = fork["full_name"]
@@ -605,6 +735,31 @@ def main() -> None:
                 "first_branch_subjects": extra_branch_summaries[0].subjects[:2] if extra_branch_summaries else [],
             }
         )
+        fork_checklist_rows.append(
+            {
+                "full_name": full_name,
+                "rating": rating,
+                "default_ahead": default_cmp.get("ahead_by", 0) if not default_cmp.get("error") else -1,
+                "borrow": should_borrow_from_fork(
+                    repo=repo,
+                    rating=rating,
+                    default_cmp=default_cmp,
+                    extra_branch_summaries=extra_branch_summaries,
+                    default_topics=default_topics,
+                    default_subjects=default_subjects,
+                ),
+                "already": already_in_our_variant(ours_cmp=ours_cmp, extra_branch_summaries=extra_branch_summaries),
+                "summary": build_checklist_summary(
+                    full_name=full_name,
+                    repo=repo,
+                    default_cmp=default_cmp,
+                    extra_branch_summaries=extra_branch_summaries,
+                    default_topics=default_topics,
+                    default_subjects=default_subjects,
+                    recommendation_text=recommendation_text,
+                ),
+            }
+        )
 
         if default_cmp.get("error"):
             key_note = "переписанная/оторванная история"
@@ -638,6 +793,13 @@ def main() -> None:
         f"- Доступно через API: `{len(forks)}` форков",
         f"- GitHub сообщает общее число форков: `{repo_data.get('forks_count', 'n/a')}`",
         "- Если числа не совпадают, один или несколько форков могли быть удалены, скрыты или временно недоступны через API.",
+        "",
+        "## Быстрые ссылки",
+        "",
+        "- [Топ фич и что реально улучшит использование](./top-features.md)",
+        "- [Единый чек-лист: просмотрено / хотим / уже у нас](./feature-decision-checklist.md)",
+        "- [Чек-лист по форкам: просмотрено / тянем / уже у нас](./fork-review-checklist.md)",
+        "- [База сравнения с нашим develop](./baseline-evgenybabenko-develop.md)",
         "",
         "## Что важно в двух строках",
         "",
@@ -675,6 +837,53 @@ def main() -> None:
         )
 
     write_text(out_dir / "README.md", "\n".join(index_lines))
+
+    fork_checklist_rows.sort(
+        key=lambda item: (
+            RATING_ORDER.get(item["rating"], 9),
+            -(item["default_ahead"] if item["default_ahead"] is not None else -1),
+            item["full_name"],
+        )
+    )
+
+    checklist_lines = [
+        "# Чек-лист по форкам",
+        "",
+        f"- Снимок: `{SNAPSHOT_DATE}` (`{snapshot_iso}` UTC)",
+        f"- Просмотрено через API: `{len(forks)}` форков",
+        f"- GitHub forks_count: `{repo_data.get('forks_count', 'n/a')}`",
+        "- Если здесь форков меньше, чем на GitHub, значит один или несколько форков были недоступны через API на момент снимка.",
+        "",
+        "## Как читать",
+        "",
+        "- `Просмотрен` означает, что по форку есть отдельный отчёт и он был сравнен с upstream и вашим публичным `develop`.",
+        "- `Берём` означает, что в форке есть идеи, которые имеет смысл тянуть к нам хотя бы выборочно.",
+        "- `Уже у нас` означает, что по видимой default-ветке и найденным feature-веткам этот fork не даёт заметного кода сверх вашего публичного `develop`.",
+        "",
+    ]
+
+    for rating in ("High", "Medium", "Low", "None"):
+        rows = [item for item in fork_checklist_rows if item["rating"] == rating]
+        if not rows:
+            continue
+        checklist_lines.extend(
+            [
+                f"## {rating}",
+                "",
+                "| Fork | Просмотрен | Берём | Уже у нас | Что там интересного |",
+                "|---|---:|---:|---:|---|",
+            ]
+        )
+        for item in rows:
+            summary = item["summary"].replace("|", "/").replace("\n", " ").strip()
+            checklist_lines.append(
+                f"| [{item['full_name']}]({report_link(item['full_name'])}) | [x] | "
+                f"{'[x]' if item['borrow'] else '[ ]'} | "
+                f"{'[x]' if item['already'] else '[ ]'} | {summary} |"
+            )
+        checklist_lines.append("")
+
+    write_text(out_dir / "fork-review-checklist.md", "\n".join(checklist_lines))
     print(f"Wrote reports to {out_dir}")
 
 

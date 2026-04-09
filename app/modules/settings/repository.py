@@ -22,9 +22,13 @@ class SettingsRepository:
             id=_SETTINGS_ID,
             sticky_threads_enabled=False,
             upstream_stream_transport="default",
-            prefer_earlier_reset_accounts=False,
+            weekly_reset_preference="disabled",
+            prioritize_full_weekly_capacity=True,
             routing_strategy="capacity_weighted",
             openai_cache_affinity_max_age_seconds=get_settings().openai_cache_affinity_max_age_seconds,
+            spread_new_codex_sessions=False,
+            spread_new_codex_sessions_window_seconds=60,
+            spread_new_codex_sessions_top_pool_size=5,
             import_without_overwrite=False,
             totp_required_on_login=False,
             password_hash=None,
@@ -49,11 +53,15 @@ class SettingsRepository:
         *,
         sticky_threads_enabled: bool | None = None,
         upstream_stream_transport: str | None = None,
-        prefer_earlier_reset_accounts: bool | None = None,
+        weekly_reset_preference: str | None = None,
+        prioritize_full_weekly_capacity: bool | None = None,
         routing_strategy: str | None = None,
         openai_cache_affinity_max_age_seconds: int | None = None,
         http_responses_session_bridge_prompt_cache_idle_ttl_seconds: int | None = None,
         sticky_reallocation_budget_threshold_pct: float | None = None,
+        spread_new_codex_sessions: bool | None = None,
+        spread_new_codex_sessions_window_seconds: int | None = None,
+        spread_new_codex_sessions_top_pool_size: int | None = None,
         import_without_overwrite: bool | None = None,
         totp_required_on_login: bool | None = None,
         api_key_auth_enabled: bool | None = None,
@@ -63,8 +71,10 @@ class SettingsRepository:
             settings.sticky_threads_enabled = sticky_threads_enabled
         if upstream_stream_transport is not None:
             settings.upstream_stream_transport = upstream_stream_transport
-        if prefer_earlier_reset_accounts is not None:
-            settings.prefer_earlier_reset_accounts = prefer_earlier_reset_accounts
+        if weekly_reset_preference is not None:
+            settings.weekly_reset_preference = weekly_reset_preference
+        if prioritize_full_weekly_capacity is not None:
+            settings.prioritize_full_weekly_capacity = prioritize_full_weekly_capacity
         if routing_strategy is not None:
             settings.routing_strategy = routing_strategy
         if openai_cache_affinity_max_age_seconds is not None:
@@ -75,6 +85,12 @@ class SettingsRepository:
             )
         if sticky_reallocation_budget_threshold_pct is not None:
             settings.sticky_reallocation_budget_threshold_pct = sticky_reallocation_budget_threshold_pct
+        if spread_new_codex_sessions is not None:
+            settings.spread_new_codex_sessions = spread_new_codex_sessions
+        if spread_new_codex_sessions_window_seconds is not None:
+            settings.spread_new_codex_sessions_window_seconds = spread_new_codex_sessions_window_seconds
+        if spread_new_codex_sessions_top_pool_size is not None:
+            settings.spread_new_codex_sessions_top_pool_size = spread_new_codex_sessions_top_pool_size
         if import_without_overwrite is not None:
             settings.import_without_overwrite = import_without_overwrite
         if totp_required_on_login is not None:

@@ -16,7 +16,7 @@ async def test_cannot_enable_totp_requirement_without_configured_secret(async_cl
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": True,
             "apiKeyAuthEnabled": False,
         },
@@ -115,7 +115,7 @@ async def test_dashboard_password_and_totp_flow(async_client, monkeypatch):
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": True,
             "apiKeyAuthEnabled": False,
         },
@@ -202,7 +202,7 @@ async def test_disable_totp_requires_totp_verified_session(async_client, monkeyp
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": True,
             "apiKeyAuthEnabled": False,
         },
@@ -251,7 +251,7 @@ async def test_disable_totp_rejects_replayed_step_code(async_client, monkeypatch
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": True,
             "apiKeyAuthEnabled": False,
         },
@@ -324,7 +324,7 @@ async def test_password_management_requires_totp_when_totp_required(async_client
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": True,
             "apiKeyAuthEnabled": False,
         },
@@ -413,7 +413,7 @@ async def test_verify_rejects_one_of_concurrent_replays(async_client, monkeypatc
         "/api/settings",
         json={
             "stickyThreadsEnabled": False,
-            "preferEarlierResetAccounts": False,
+            "weeklyResetPreference": "disabled",
             "totpRequiredOnLogin": True,
             "apiKeyAuthEnabled": False,
         },

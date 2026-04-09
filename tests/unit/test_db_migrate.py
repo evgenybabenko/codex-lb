@@ -348,6 +348,8 @@ def test_run_upgrade_repairs_branched_legacy_revision_ids(tmp_path: Path) -> Non
         api_key_columns = {column["name"] for column in inspector.get_columns("api_keys")}
 
         assert "routing_strategy" in dashboard_columns
+        assert "weekly_reset_preference" in dashboard_columns
+        assert "prioritize_full_weekly_capacity" in dashboard_columns
         assert "enforced_model" in api_key_columns
         assert "enforced_reasoning_effort" in api_key_columns
         assert inspector.has_table("api_firewall_allowlist")

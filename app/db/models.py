@@ -15,6 +15,7 @@ from sqlalchemy import (
     LargeBinary,
     String,
     Text,
+    true,
     UniqueConstraint,
     false,
     func,
@@ -182,6 +183,24 @@ class StickySession(Base):
     )
 
 
+class RecentSessionAssignment(Base):
+    __tablename__ = "recent_session_assignments"
+
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    kind: Mapped[StickySessionKind] = mapped_column(
+        SqlEnum(
+            StickySessionKind,
+            name="sticky_session_kind",
+            validate_strings=True,
+            values_callable=_enum_values,
+        ),
+        primary_key=True,
+        nullable=False,
+    )
+    account_id: Mapped[str] = mapped_column(String, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False, index=True)
+
+
 class DashboardSettings(Base):
     __tablename__ = "dashboard_settings"
 
@@ -193,7 +212,18 @@ class DashboardSettings(Base):
         server_default=text("'default'"),
         nullable=False,
     )
-    prefer_earlier_reset_accounts: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    weekly_reset_preference: Mapped[str] = mapped_column(
+        String,
+        default="disabled",
+        server_default=text("'disabled'"),
+        nullable=False,
+    )
+    prioritize_full_weekly_capacity: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=true(),
+        nullable=False,
+    )
     routing_strategy: Mapped[str] = mapped_column(
         String,
         default="capacity_weighted",
@@ -235,6 +265,24 @@ class DashboardSettings(Base):
         Float,
         default=95.0,
         server_default=text("95.0"),
+        nullable=False,
+    )
+    spread_new_codex_sessions: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=false(),
+        nullable=False,
+    )
+    spread_new_codex_sessions_window_seconds: Mapped[int] = mapped_column(
+        Integer,
+        default=60,
+        server_default=text("60"),
+        nullable=False,
+    )
+    spread_new_codex_sessions_top_pool_size: Mapped[int] = mapped_column(
+        Integer,
+        default=5,
+        server_default=text("5"),
         nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)

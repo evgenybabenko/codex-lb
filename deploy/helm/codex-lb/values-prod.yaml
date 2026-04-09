@@ -24,6 +24,10 @@ topologySpreadConstraints:
       matchLabels: {}
 networkPolicy:
   enabled: true
+  # Keep the prod overlay reachable by the default ingress-nginx controller while
+  # preserving the fail-closed chart default for every other namespace.
+  ingressNSMatchLabels:
+    kubernetes.io/metadata.name: ingress-nginx
 metrics:
   serviceMonitor:
     enabled: true
